@@ -1,0 +1,142 @@
+@page "/lanes"
+@using Microsoft.EntityFrameworkCore
+@using BTSS.Rating.Infrastructure.Persistence
+@using BTSS.Rating.Infrastructure.Persistence.Entities
+@using BTSS.Rating.Persistence
+@inject RatingDbContext Db
+@inject DialogService DialogService
+@inject NotificationService NotificationService
+
+<h3>Contract Lane Eligibility</h3>
+
+<RadzenCard>
+  <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="1rem" class="rz-mb-2">
+    <RadzenDropDown TValue="long?" Data="@contractVersions" TextProperty="Label" ValueProperty="ContractVersionId"
+                    @bind-Value="selectedContractVersionId" Placeholder="Select Contract Version" Style="min-width: 340px"
+                    Change="@OnVersionChange" />
+    <RadzenButton Icon="add_circle_outline" Text="Add" Disabled="@(selectedContractVersionId is null)" Click="@AddRow" />
+  </RadzenStack>
+
+  <RadzenDataGrid @ref="grid" Data="@rows" TItem="ContractLaneEligibility"
+                  AllowFiltering="true" AllowSorting="true" AllowPaging="true" PageSize="15"
+                  EditMode="DataGridEditMode.Single"
+                  RowUpdate="@OnUpdate" RowCreate="@OnCreate">
+    <Columns>
+      <RadzenDataGridColumn TItem="ContractLaneEligibility" Property="ContractLaneEligibilityId" Title="Id" Width="90px" />
+      <RadzenDataGridColumn TItem="ContractLaneEligibility" Property="ContractVersionId" Title="ContractVersionId" Width="140px" />
+      <RadzenDataGridColumn TItem="ContractLaneEligibility" Property="Mode" Title="Mode" Width="90px" />
+      <RadzenDataGridColumn TItem="ContractLaneEligibility" Property="OriginZoneId" Title="OriginZone" Width="120px" />
+      <RadzenDataGridColumn TItem="ContractLaneEligibility" Property="DestZoneId" Title="DestZone" Width="120px" />
+      <RadzenDataGridColumn TItem="ContractLaneEligibility" Property="OriginRegionId" Title="OriginRegion" Width="130px" />
+      <RadzenDataGridColumn TItem="ContractLaneEligibility" Property="DestRegionId" Title="DestRegion" Width="130px" />
+      <RadzenDataGridColumn TItem="ContractLaneEligibility" Property="EquipmentType" Title="EquipmentType" Width="140px" />
+      <RadzenDataGridColumn TItem="ContractLaneEligibility" Property="OriginPort" Title="OriginPort" Width="130px" />
+      <RadzenDataGridColumn TItem="ContractLaneEligibility" Property="DestPort" Title="DestPort" Width="130px" />
+      <RadzenDataGridColumn TItem="ContractLaneEligibility" Property="ContainerType" Title="ContainerType" Width="140px" />
+      <RadzenDataGridColumn TItem="ContractLaneEligibility" Property="AllowsMultiStop" Title="MultiStop" Width="110px" />
+      <RadzenDataGridColumn TItem="ContractLaneEligibility" Property="RequiresAppointment" Title="Appt" Width="90px" />
+      <RadzenDataGridColumn TItem="ContractLaneEligibility" Property="AllowsHazmat" Title="Hazmat" Width="110px" />
+
+      <RadzenDataGridColumn TItem="ContractLaneEligibility" Context="r" Title="Actions" Width="170px" Filterable="false" Sortable="false">
+        <Template Context="r">
+          <RadzenButton Icon="edit" Size="ButtonSize.Small" Click="@(() => grid!.EditRow(r))" class="rz-mr-1" />
+          <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Size="ButtonSize.Small" Click="@(() => DeleteRow(r))" />
+        </Template>
+        <EditTemplate Context="r">
+          <RadzenButton Icon="save" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Primary" Click="@(() => grid!.UpdateRow(r))" class="rz-mr-1" />
+          <RadzenButton Icon="cancel" Size="ButtonSize.Small" Click="@(() => grid!.CancelEditRow(r))" />
+        </EditTemplate>
+      </RadzenDataGridColumn>
+    </Columns>
+  </RadzenDataGrid>
+</RadzenCard>
+
+@code {
+  private RadzenDataGrid<ContractLaneEligibility>? grid;
+
+  private long? selectedContractVersionId;
+  private List<ContractLaneEligibility> rows = new();
+
+  private List<ContractVersionPick> contractVersions = new();
+
+  protected override async Task OnInitializedAsync()
+  {
+    contractVersions = await Db.ContractVersions.AsNoTracking()
+      .OrderByDescending(v => v.ContractVersionId)
+      .Select(v => new ContractVersionPick(v.ContractVersionId, $"{v.ContractId} - v{v.VersionNo} ({v.PublishStatus}) {v.EffectiveStart}..{v.EffectiveEnd}"))
+      .ToListAsync();
+  }
+
+  private async Task OnVersionChange(object _)
+  {
+    await LoadRows();
+  }
+
+  private async Task LoadRows()
+  {
+    if (selectedContractVersionId is null)
+    {
+      rows = new();
+      return;
+    }
+
+    rows = await Db.ContractLaneEligibility.AsNoTracking()
+      .Where(x => x.ContractVersionId == selectedContractVersionId.Value)
+      .OrderByDescending(x => x.ContractLaneEligibilityId)
+      .ToListAsync();
+  }
+
+  private async Task AddRow()
+  {
+    if (selectedContractVersionId is null) return;
+
+    var r = new ContractLaneEligibility
+    {
+      ContractVersionId = selectedContractVersionId.Value,
+      Mode = "LTL",
+      AllowsMultiStop = false,
+      RequiresAppointment = false,
+      AllowsHazmat = false
+    };
+
+    rows.Insert(0, r);
+    await grid!.InsertRow(r);
+  }
+
+  private async Task OnCreate(ContractLaneEligibility r)
+  {
+    Db.ContractLaneEligibility.Add(r);
+    await Db.SaveChangesAsync();
+    await LoadRows();
+    await grid!.Reload();
+    Notify("Created lane eligibility.");
+  }
+
+  private async Task OnUpdate(ContractLaneEligibility r)
+  {
+    Db.ContractLaneEligibility.Update(r);
+    await Db.SaveChangesAsync();
+    await LoadRows();
+    await grid!.Reload();
+    Notify("Saved lane eligibility.");
+  }
+
+  private async Task DeleteRow(ContractLaneEligibility r)
+  {
+    var ok = await DialogService.Confirm("Delete this row?", "Confirm", new ConfirmOptions(){ OkButtonText="Delete", CancelButtonText="Cancel" });
+    if (ok != true) return;
+
+    Db.ContractLaneEligibility.Remove(r);
+    await Db.SaveChangesAsync();
+    await LoadRows();
+    await grid!.Reload();
+    Notify("Deleted lane eligibility.", NotificationSeverity.Warning);
+  }
+
+  private void Notify(string message, NotificationSeverity severity = NotificationSeverity.Info)
+  {
+    NotificationService.Notify(new NotificationMessage{ Severity=severity, Summary=message, Duration=3000 });
+  }
+
+  private sealed record ContractVersionPick(long ContractVersionId, string Label);
+}

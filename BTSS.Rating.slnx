@@ -1,0 +1,9 @@
+<Solution>
+  <Project Path="BTSS.Rating.Admin/BTSS.Rating.Admin.csproj" />
+  <Project Path="BTSS.Rating.Api/BTSS.Rating.Api.csproj" />
+  <Project Path="BTSS.Rating.Application/BTSS.Rating.Application.csproj" />
+  <Project Path="BTSS.Rating.Domain/BTSS.Rating.Domain.csproj" />
+  <Project Path="BTSS.Rating.Infrastructure/BTSS.Rating.Infrastructure.csproj" />
+  <Project Path="BTSS.Rating.Shared/BTSS.Rating.Shared.csproj" />
+  <Project Path="BTSS.Rating.Tests/BTSS.Rating.Tests.csproj" />
+</Solution>

@@ -1,0 +1,288 @@
+@page "/contracts"
+@using Microsoft.EntityFrameworkCore
+@using BTSS.Rating.Infrastructure.Persistence
+@using BTSS.Rating.Infrastructure.Persistence.Entities
+@using BTSS.Rating.Persistence
+@inject RatingDbContext Db
+@inject DialogService DialogService
+@inject NotificationService NotificationService
+
+<h3>Contracts</h3>
+
+<RadzenRow Gap="1rem">
+  <RadzenColumn Size="12" SizeMD="7">
+    <RadzenCard>
+      <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" JustifyContent="JustifyContent.SpaceBetween" class="rz-mb-2">
+        <RadzenText Text="Contracts" TextStyle="TextStyle.Subtitle1" />
+        <RadzenButton Icon="add_circle_outline" Text="Add" Click="@AddContract" />
+      </RadzenStack>
+
+      <RadzenDataGrid @ref="contractsGrid"
+                      Data="@contracts"
+                      TItem="Contract"
+                      AllowFiltering="true"
+                      AllowSorting="true"
+                      AllowPaging="true"
+                      PageSize="15"
+                      EditMode="DataGridEditMode.Single"
+                      RowUpdate="@OnContractUpdate"
+                      RowCreate="@OnContractCreate"
+                      RowSelect="@OnContractSelect">
+        <Columns>
+          <RadzenDataGridColumn TItem="Contract" Property="ContractId" Title="Id" Width="90px" />
+          <RadzenDataGridColumn TItem="Contract" Property="AccountId" Title="AccountId" Width="120px" />
+          <RadzenDataGridColumn TItem="Contract" Property="ProviderId" Title="ProviderId" Width="120px" />
+          <RadzenDataGridColumn TItem="Contract" Property="Mode" Title="Mode" Width="90px" />
+          <RadzenDataGridColumn TItem="Contract" Property="Name" Title="Name" />
+          <RadzenDataGridColumn TItem="Contract" Property="CurrencyCode" Title="Currency" Width="110px" />
+          <RadzenDataGridColumn TItem="Contract" Property="Status" Title="Status" Width="130px" />
+          <RadzenDataGridColumn TItem="Contract" Property="IsActive" Title="Active" Width="90px" />
+          <RadzenDataGridColumn TItem="Contract" Property="PublishedDate" Title="Published" Width="140px" />
+
+          <RadzenDataGridColumn TItem="Contract" Context="c" Title="Actions" Width="170px" Filterable="false" Sortable="false">
+            <Template Context="c">
+              <RadzenButton Icon="edit" Size="ButtonSize.Small" Click="@(() => EditContract(c))" class="rz-mr-1" />
+              <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Size="ButtonSize.Small" Click="@(() => DeleteContract(c))" />
+            </Template>
+            <EditTemplate Context="c">
+              <RadzenButton Icon="save" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Primary" Click="@(() => SaveContract(c))" class="rz-mr-1" />
+              <RadzenButton Icon="cancel" Size="ButtonSize.Small" Click="@(() => CancelContractEdit(c))" />
+            </EditTemplate>
+          </RadzenDataGridColumn>
+        </Columns>
+      </RadzenDataGrid>
+    </RadzenCard>
+  </RadzenColumn>
+
+  <RadzenColumn Size="12" SizeMD="5">
+    <RadzenCard>
+      <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" JustifyContent="JustifyContent.SpaceBetween" class="rz-mb-2">
+        <RadzenText Text="Contract Versions" TextStyle="TextStyle.Subtitle1" />
+        <RadzenButton Icon="add_circle_outline" Text="Add" Disabled="@(_selectedContract is null)" Click="@AddVersion" />
+      </RadzenStack>
+
+      @if (_selectedContract is null)
+      {
+        <RadzenText Text="Select a contract to manage versions." />
+      }
+      else
+      {
+        <RadzenDataGrid @ref="versionsGrid"
+                        Data="@versions"
+                        TItem="ContractVersion"
+                        AllowFiltering="true"
+                        AllowSorting="true"
+                        AllowPaging="true"
+                        PageSize="10"
+                        EditMode="DataGridEditMode.Single"
+                        RowUpdate="@OnVersionUpdate"
+                        RowCreate="@OnVersionCreate">
+          <Columns>
+            <RadzenDataGridColumn TItem="ContractVersion" Property="ContractVersionId" Title="Id" Width="90px" />
+            <RadzenDataGridColumn TItem="ContractVersion" Property="VersionNo" Title="Ver" Width="70px" />
+            <RadzenDataGridColumn TItem="ContractVersion" Property="EffectiveStart" Title="Start" Width="120px" />
+            <RadzenDataGridColumn TItem="ContractVersion" Property="EffectiveEnd" Title="End" Width="120px" />
+            <RadzenDataGridColumn TItem="ContractVersion" Property="PublishStatus" Title="Status" Width="120px" />
+            <RadzenDataGridColumn TItem="ContractVersion" Property="PublishedAt" Title="PublishedAt" Width="160px" />
+            <RadzenDataGridColumn TItem="ContractVersion" Property="Note" Title="Note" />
+
+            <RadzenDataGridColumn TItem="ContractVersion" Context="v" Title="Actions" Width="220px" Filterable="false" Sortable="false">
+              <Template Context="v">
+                <RadzenButton Icon="edit" Size="ButtonSize.Small" Click="@(() => EditVersion(v))" class="rz-mr-1" />
+                <RadzenButton Icon="publish" Text="Publish" Size="ButtonSize.Small" Disabled="@(v.PublishStatus == "Published")" Click="@(() => PublishVersion(v))" class="rz-mr-1" />
+                <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Size="ButtonSize.Small" Click="@(() => DeleteVersion(v))" />
+              </Template>
+              <EditTemplate Context="v">
+                <RadzenButton Icon="save" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Primary" Click="@(() => SaveVersion(v))" class="rz-mr-1" />
+                <RadzenButton Icon="cancel" Size="ButtonSize.Small" Click="@(() => CancelVersionEdit(v))" />
+              </EditTemplate>
+            </RadzenDataGridColumn>
+          </Columns>
+        </RadzenDataGrid>
+      }
+    </RadzenCard>
+  </RadzenColumn>
+</RadzenRow>
+
+@code {
+  private RadzenDataGrid<Contract>? contractsGrid;
+  private RadzenDataGrid<ContractVersion>? versionsGrid;
+
+  private List<Contract> contracts = new();
+  private List<ContractVersion> versions = new();
+
+  private Contract? _selectedContract;
+
+  protected override async Task OnInitializedAsync()
+  {
+    await LoadContracts();
+  }
+
+  private async Task LoadContracts()
+  {
+    contracts = await Db.Contracts.AsNoTracking().OrderByDescending(c => c.ContractId).ToListAsync();
+  }
+
+  private async Task LoadVersions(long contractId)
+  {
+    versions = await Db.ContractVersions.AsNoTracking()
+      .Where(v => v.ContractId == contractId)
+      .OrderByDescending(v => v.VersionNo)
+      .ToListAsync();
+  }
+
+  private async Task OnContractSelect(Contract c)
+  {
+    _selectedContract = c;
+    await LoadVersions(c.ContractId);
+    await InvokeAsync(StateHasChanged);
+  }
+
+  private async Task AddContract()
+  {
+    var c = new Contract
+    {
+      ProviderId = 1,
+      Mode = "LTL",
+      Name = "New Contract",
+      CurrencyCode = "USD",
+      Status = "Draft",
+      CreatedAt = DateTime.UtcNow,
+      IsActive = true
+    };
+
+    contracts.Insert(0, c);
+    await contractsGrid!.InsertRow(c);
+  }
+
+  private async Task EditContract(Contract c) => await contractsGrid!.EditRow(c);
+  private async Task SaveContract(Contract c) => await contractsGrid!.UpdateRow(c);
+  private void CancelContractEdit(Contract c) => contractsGrid!.CancelEditRow(c);
+
+  private async Task OnContractCreate(Contract c)
+  {
+    Db.Contracts.Add(c);
+    await Db.SaveChangesAsync();
+    await LoadContracts();
+    await contractsGrid!.Reload();
+    Notify("Created contract.");
+  }
+
+  private async Task OnContractUpdate(Contract c)
+  {
+    Db.Contracts.Update(c);
+    await Db.SaveChangesAsync();
+    await LoadContracts();
+    await contractsGrid!.Reload();
+    Notify("Saved contract.");
+  }
+
+  private async Task DeleteContract(Contract c)
+  {
+    var ok = await DialogService.Confirm("Delete this contract?", "Confirm", new ConfirmOptions() { OkButtonText="Delete", CancelButtonText="Cancel" });
+    if (ok != true) return;
+
+    Db.Contracts.Remove(c);
+    await Db.SaveChangesAsync();
+    _selectedContract = null;
+    versions.Clear();
+    await LoadContracts();
+    await contractsGrid!.Reload();
+    Notify("Deleted contract.", NotificationSeverity.Warning);
+  }
+
+  private async Task AddVersion()
+  {
+    if (_selectedContract is null) return;
+
+    var nextVer = (await Db.ContractVersions.Where(v => v.ContractId == _selectedContract.ContractId).MaxAsync(v => (int?)v.VersionNo)) ?? 0;
+    var v = new ContractVersion
+    {
+      ContractId = _selectedContract.ContractId,
+      VersionNo = nextVer + 1,
+      EffectiveStart = DateOnly.FromDateTime(DateTime.UtcNow.Date),
+      EffectiveEnd = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddYears(1)),
+      PublishStatus = "Draft",
+      CreatedAt = DateTime.UtcNow
+    };
+
+    versions.Insert(0, v);
+    await versionsGrid!.InsertRow(v);
+  }
+
+  private async Task EditVersion(ContractVersion v) => await versionsGrid!.EditRow(v);
+  private async Task SaveVersion(ContractVersion v) => await versionsGrid!.UpdateRow(v);
+  private void CancelVersionEdit(ContractVersion v) => versionsGrid!.CancelEditRow(v);
+
+  private async Task OnVersionCreate(ContractVersion v)
+  {
+    Db.ContractVersions.Add(v);
+    await Db.SaveChangesAsync();
+    await LoadVersions(v.ContractId);
+    await versionsGrid!.Reload();
+    Notify("Created version.");
+  }
+
+  private async Task OnVersionUpdate(ContractVersion v)
+  {
+    Db.ContractVersions.Update(v);
+    await Db.SaveChangesAsync();
+    await LoadVersions(v.ContractId);
+    await versionsGrid!.Reload();
+    Notify("Saved version.");
+  }
+
+  private async Task DeleteVersion(ContractVersion v)
+  {
+    var ok = await DialogService.Confirm("Delete this version?", "Confirm", new ConfirmOptions() { OkButtonText="Delete", CancelButtonText="Cancel" });
+    if (ok != true) return;
+
+    Db.ContractVersions.Remove(v);
+    await Db.SaveChangesAsync();
+
+    if (_selectedContract is not null)
+      await LoadVersions(_selectedContract.ContractId);
+
+    await versionsGrid!.Reload();
+    Notify("Deleted version.", NotificationSeverity.Warning);
+  }
+
+  private async Task PublishVersion(ContractVersion v)
+  {
+    // Simple DB-side publish flag. If you want richer history, we can add an API endpoint.
+    v.PublishStatus = "Published";
+    v.PublishedAt = DateTime.UtcNow;
+
+    Db.ContractVersions.Update(v);
+
+    if (_selectedContract is not null)
+    {
+      // optional: update contract status
+      var c = await Db.Contracts.FirstOrDefaultAsync(x => x.ContractId == _selectedContract.ContractId);
+      if (c is not null)
+      {
+        c.Status = "Published";
+        c.PublishedDate = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+        Db.Contracts.Update(c);
+      }
+    }
+
+    await Db.SaveChangesAsync();
+
+    if (_selectedContract is not null)
+      await LoadVersions(_selectedContract.ContractId);
+
+    await versionsGrid!.Reload();
+    Notify("Published version.", NotificationSeverity.Success);
+  }
+
+  private void Notify(string message, NotificationSeverity severity = NotificationSeverity.Info)
+  {
+    NotificationService.Notify(new NotificationMessage
+    {
+      Severity = severity,
+      Summary = message,
+      Duration = 3000
+    });
+  }
+}

@@ -1,0 +1,153 @@
+@page "/preview-quote"
+@using BTSS.Rating.Admin.Services
+@using BTSS.Rating.Shared.Contracts
+@using BTSS.Rating.Shared.Enums
+@inject RatingApiClient RatingApi
+@inject NotificationService NotificationService
+
+<h3>Preview Quote (API)</h3>
+
+<RadzenRow Gap="1rem">
+  <RadzenColumn Size="12" SizeMD="5">
+    <RadzenCard>
+      <RadzenTemplateForm Data="@model" Submit="@OnSubmit">
+        <RadzenStack Gap="0.75rem">
+          <RadzenDropDown TValue="ShipmentMode" Data="@modes" @bind-Value="model.Mode" TextProperty="Text" ValueProperty="Value" Name="Mode" />
+          <RadzenTextBox @bind-Value="model.CustomerId" Name="CustomerId" Placeholder="CustomerId (optional)" />
+          <RadzenTextBox @bind-Value="model.ContractId" Name="ContractId" Placeholder="ContractId (optional)" />
+
+          <RadzenFieldset Text="Origin">
+            <RadzenStack Gap="0.5rem">
+              <RadzenTextBox @bind-Value="model.Origin.Country" Placeholder="Country" />
+              <RadzenTextBox @bind-Value="model.Origin.StateOrProvince" Placeholder="State/Province" />
+              <RadzenTextBox @bind-Value="model.Origin.City" Placeholder="City" />
+              <RadzenTextBox @bind-Value="model.Origin.PostalCode" Placeholder="Postal Code" />
+            </RadzenStack>
+          </RadzenFieldset>
+
+          <RadzenFieldset Text="Destination">
+            <RadzenStack Gap="0.5rem">
+              <RadzenTextBox @bind-Value="model.Destination.Country" Placeholder="Country" />
+              <RadzenTextBox @bind-Value="model.Destination.StateOrProvince" Placeholder="State/Province" />
+              <RadzenTextBox @bind-Value="model.Destination.City" Placeholder="City" />
+              <RadzenTextBox @bind-Value="model.Destination.PostalCode" Placeholder="Postal Code" />
+            </RadzenStack>
+          </RadzenFieldset>
+
+          <RadzenFieldset Text="Line">
+            <RadzenStack Gap="0.5rem">
+              <RadzenNumeric TValue="decimal" @bind-Value="line.Weight" Placeholder="Weight" />
+              <RadzenNumeric TValue="int" @bind-Value="line.Pieces" Placeholder="Pieces" />
+              <RadzenTextBox @bind-Value="line.FreightClass" Placeholder="Freight Class (LTL)" />
+              <RadzenTextBox @bind-Value="line.Nmfc" Placeholder="NMFC (optional)" />
+            </RadzenStack>
+          </RadzenFieldset>
+
+          <RadzenButton ButtonType="ButtonType.Submit" Icon="calculate" Text="Quote" Disabled="@busy" />
+        </RadzenStack>
+      </RadzenTemplateForm>
+    </RadzenCard>
+  </RadzenColumn>
+
+  <RadzenColumn Size="12" SizeMD="7">
+    <RadzenCard>
+      <RadzenStack Gap="0.75rem">
+        <RadzenText Text="Result" TextStyle="TextStyle.Subtitle1" />
+        @if (busy)
+        {
+          <RadzenProgressBar Mode="ProgressBarMode.Indeterminate" />
+        }
+        else if (quote is null)
+        {
+          <RadzenText Text="Submit a request to see pricing." />
+        }
+        else
+        {
+          <RadzenAlert Severity="AlertSeverity.Info">
+            <div><strong>QuoteId:</strong> @quote.QuoteId</div>
+            <div><strong>Total:</strong> @quote.Total</div>
+          </RadzenAlert>
+
+          <RadzenDataGrid Data="@quote.Charges" TItem="RatingChargeLine" AllowPaging="true" PageSize="10">
+            <Columns>
+              <RadzenDataGridColumn TItem="RatingChargeLine" Property="Code" Title="Code" Width="140px" />
+              <RadzenDataGridColumn TItem="RatingChargeLine" Property="Description" Title="Description" />
+              <RadzenDataGridColumn TItem="RatingChargeLine" Property="Amount" Title="Amount" Width="130px" />
+            </Columns>
+          </RadzenDataGrid>
+
+          @if (quote.Warnings?.Count > 0)
+          {
+            <RadzenFieldset Text="Warnings">
+              <ul>
+                @foreach (var w in quote.Warnings)
+                {
+                  <li>@w</li>
+                }
+              </ul>
+            </RadzenFieldset>
+          }
+        }
+      </RadzenStack>
+    </RadzenCard>
+  </RadzenColumn>
+</RadzenRow>
+
+@code {
+  private bool busy;
+  private RatingQuoteResponse? quote;
+
+  private readonly List<ModePick> modes = Enum.GetValues<ShipmentMode>()
+    .Select(m => new ModePick(m, m.ToString()))
+    .ToList();
+
+  private QuoteModel model = new()
+  {
+    Mode = ShipmentMode.LTL,
+    Origin = new Address("US", "NY", "New York", "10001"),
+    Destination = new Address("US", "IL", "Chicago", "60601"),
+  };
+
+  private ShipmentLine line = new(Weight: 1000m, Pieces: 1, LengthIn: null, WidthIn: null, HeightIn: null, FreightClass: "55", Nmfc: null);
+
+  private async Task OnSubmit()
+  {
+    busy = true;
+    quote = null;
+    try
+    {
+      var req = new RatingQuoteRequest(
+        Mode: model.Mode,
+        CustomerId: string.IsNullOrWhiteSpace(model.CustomerId) ? null : model.CustomerId,
+        ContractId: string.IsNullOrWhiteSpace(model.ContractId) ? null : model.ContractId,
+        Origin: model.Origin,
+        Destination: model.Destination,
+        ShipDate: DateOnly.FromDateTime(DateTime.UtcNow.Date),
+        Lines: new[] { line },
+        AccessorialCodes: null
+      );
+
+      quote = await RatingApi.QuoteAsync(req);
+      NotificationService.Notify(new NotificationMessage{ Severity=NotificationSeverity.Success, Summary="Quote complete", Duration=2500 });
+    }
+    catch (Exception ex)
+    {
+      NotificationService.Notify(new NotificationMessage{ Severity=NotificationSeverity.Error, Summary="Quote failed", Detail=ex.Message, Duration=5000 });
+    }
+    finally
+    {
+      busy = false;
+    }
+  }
+
+  private sealed record ModePick(ShipmentMode Value, string Text);
+
+  private sealed class QuoteModel
+  {
+    public ShipmentMode Mode { get; set; }
+    public string? CustomerId { get; set; }
+    public string? ContractId { get; set; }
+    public Address Origin { get; set; } = new("US", null, null, null);
+    public Address Destination { get; set; } = new("US", null, null, null);
+  }
+}

@@ -1,0 +1,197 @@
+﻿{
+   "CodeGenerationMode": 6,
+   "ContextClassName": "RatingDbContext",
+   "ContextNamespace": null,
+   "FilterSchemas": false,
+   "IncludeConnectionString": false,
+   "IrregularWords": null,
+   "MinimumProductVersion": "2.6.1301",
+   "ModelNamespace": null,
+   "OutputContextPath": "Persistence",
+   "OutputPath": "Models",
+   "PluralRules": null,
+   "PreserveCasingWithRegex": true,
+   "ProjectRootNamespace": "BTSS.Rating",
+   "Schemas": null,
+   "SelectedHandlebarsLanguage": 2,
+   "SelectedToBeGenerated": 0,
+   "SingularRules": null,
+   "T4TemplatePath": null,
+   "Tables": [
+      {
+         "Name": "[rating].[AccessorialRules]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[rating].[Accessorials]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[rating].[Accounts]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[rating].[CacheNamespaces]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[rating].[ContractAccessorialCharges]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[rating].[ContractFuelRules]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[rating].[ContractLaneEligibility]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[rating].[Contracts]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[rating].[ContractStatusHistory]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[rating].[ContractVersions]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[rating].[EdiChargeCodes]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[rating].[FclContainerRates]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[rating].[FtlLaneRates]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[rating].[FuelScheduleRows]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[rating].[FuelSchedules]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[rating].[GeoZipZone]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[rating].[LclRates]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[rating].[Locations]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[rating].[LtlBaseRates]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[rating].[LtlDiscountRules]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[rating].[Providers]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[rating].[RateQuoteChargeLines]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[rating].[RateQuoteResults]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[rating].[RateQuotes]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[rating].[usp_BumpCacheNamespace]",
+         "ObjectType": 1
+      },
+      {
+         "Name": "[rating].[usp_BumpNamespacesForContract]",
+         "ObjectType": 1
+      },
+      {
+         "Name": "[rating].[usp_BumpNamespacesForContractVersion]",
+         "ObjectType": 1
+      },
+      {
+         "Name": "[rating].[usp_GetCacheNamespaceVersion]",
+         "ObjectType": 1
+      },
+      {
+         "Name": "[rating].[usp_GetCacheNamespaceVersionsForQuote]",
+         "ObjectType": 1
+      },
+      {
+         "Name": "[rating].[usp_GetCandidateContractVersions_ByLaneHash]",
+         "ObjectType": 1
+      },
+      {
+         "Name": "[rating].[usp_GetCandidateContractVersions_Fast]",
+         "ObjectType": 1
+      },
+      {
+         "Name": "[rating].[usp_GetCandidateContractVersions_HashFast]",
+         "ObjectType": 1
+      },
+      {
+         "Name": "[rating].[usp_GetCandidateContractVersions]",
+         "ObjectType": 1
+      },
+      {
+         "Name": "[rating].[usp_PublishContractVersion_Hash]",
+         "ObjectType": 1
+      },
+      {
+         "Name": "[rating].[usp_PublishContractVersion]",
+         "ObjectType": 1
+      },
+      {
+         "Name": "[rating].[usp_RebuildContractLaneEligibility_Hash]",
+         "ObjectType": 1
+      },
+      {
+         "Name": "[rating].[usp_RebuildContractLaneEligibility]",
+         "ObjectType": 1
+      }
+   ],
+   "UiHint": null,
+   "UncountableWords": null,
+   "UseAsyncStoredProcedureCalls": true,
+   "UseBoolPropertiesWithoutDefaultSql": false,
+   "UseDatabaseNames": false,
+   "UseDatabaseNamesForRoutines": true,
+   "UseDateOnlyTimeOnly": true,
+   "UseDbContextSplitting": false,
+   "UseDecimalDataAnnotationForSprocResult": true,
+   "UseFluentApiOnly": false,
+   "UseHandleBars": false,
+   "UseHierarchyId": true,
+   "UseInflector": true,
+   "UseInternalAccessModifiersForSprocsAndFunctions": false,
+   "UseLegacyPluralizer": false,
+   "UseManyToManyEntity": false,
+   "UseNoDefaultConstructor": false,
+   "UseNoNavigations": false,
+   "UseNoObjectFilter": false,
+   "UseNodaTime": false,
+   "UseNullableReferences": true,
+   "UsePrefixNavigationNaming": false,
+   "UseSchemaFolders": true,
+   "UseSchemaNamespaces": false,
+   "UseSpatial": true,
+   "UseT4": false,
+   "UseT4Split": false
+}

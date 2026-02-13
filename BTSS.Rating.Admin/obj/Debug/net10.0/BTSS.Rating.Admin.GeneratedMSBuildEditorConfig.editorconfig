@@ -1,0 +1,115 @@
+is_global = true
+build_property.TargetFramework = net10.0
+build_property.TargetFrameworkIdentifier = .NETCoreApp
+build_property.TargetFrameworkVersion = v10.0
+build_property.TargetPlatformMinVersion = 
+build_property.UsingMicrosoftNETSdkWeb = true
+build_property.ProjectTypeGuids = 
+build_property.InvariantGlobalization = 
+build_property.PlatformNeutralAssembly = 
+build_property.EnforceExtendedAnalyzerRules = 
+build_property._SupportedPlatformList = Linux,macOS,Windows
+build_property.RootNamespace = BTSS.Rating
+build_property.RootNamespace = BTSS.Rating
+build_property.ProjectDir = C:\Rating\src\BTSS.Rating\RatingEngine\BTSS.Rating.Admin\
+build_property.EnableComHosting = 
+build_property.EnableGeneratedComInterfaceComImportInterop = 
+build_property.RazorLangVersion = 9.0
+build_property.SupportLocalizedComponentNames = 
+build_property.GenerateRazorMetadataSourceChecksumAttributes = 
+build_property.MSBuildProjectDirectory = C:\Rating\src\BTSS.Rating\RatingEngine\BTSS.Rating.Admin
+build_property._RazorSourceGeneratorDebug = 
+build_property.EffectiveAnalysisLevelStyle = 10.0
+build_property.EnableCodeStyleSeverity = 
+
+[C:/Rating/src/BTSS.Rating/RatingEngine/BTSS.Rating.Admin/Components/App.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xBcHAucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Rating/src/BTSS.Rating/RatingEngine/BTSS.Rating.Admin/Components/Layout/MainLayout.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xMYXlvdXRcTWFpbkxheW91dC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Rating/src/BTSS.Rating/RatingEngine/BTSS.Rating.Admin/Components/Layout/NotFoundLayout.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xMYXlvdXRcTm90Rm91bmRMYXlvdXQucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Rating/src/BTSS.Rating/RatingEngine/BTSS.Rating.Admin/Components/Pages/Accessorials/ContractCharges.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBY2Nlc3NvcmlhbHNcQ29udHJhY3RDaGFyZ2VzLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Rating/src/BTSS.Rating/RatingEngine/BTSS.Rating.Admin/Components/Pages/Accessorials/List.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBY2Nlc3NvcmlhbHNcTGlzdC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Rating/src/BTSS.Rating/RatingEngine/BTSS.Rating.Admin/Components/Pages/Accessorials/Rules.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBY2Nlc3NvcmlhbHNcUnVsZXMucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Rating/src/BTSS.Rating/RatingEngine/BTSS.Rating.Admin/Components/Pages/Contracts.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xDb250cmFjdHMucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Rating/src/BTSS.Rating/RatingEngine/BTSS.Rating.Admin/Components/Pages/Fuel/ContractRules.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xGdWVsXENvbnRyYWN0UnVsZXMucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Rating/src/BTSS.Rating/RatingEngine/BTSS.Rating.Admin/Components/Pages/Fuel/Rows.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xGdWVsXFJvd3MucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Rating/src/BTSS.Rating/RatingEngine/BTSS.Rating.Admin/Components/Pages/Fuel/Schedules.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xGdWVsXFNjaGVkdWxlcy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Rating/src/BTSS.Rating/RatingEngine/BTSS.Rating.Admin/Components/Pages/Index.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xJbmRleC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Rating/src/BTSS.Rating/RatingEngine/BTSS.Rating.Admin/Components/Pages/Lanes.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xMYW5lcy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Rating/src/BTSS.Rating/RatingEngine/BTSS.Rating.Admin/Components/Pages/NotFound.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xOb3RGb3VuZC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Rating/src/BTSS.Rating/RatingEngine/BTSS.Rating.Admin/Components/Pages/PreviewQuote.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xQcmV2aWV3UXVvdGUucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Rating/src/BTSS.Rating/RatingEngine/BTSS.Rating.Admin/Components/Pages/Rates/FclContainers.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xSYXRlc1xGY2xDb250YWluZXJzLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Rating/src/BTSS.Rating/RatingEngine/BTSS.Rating.Admin/Components/Pages/Rates/FtlLanes.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xSYXRlc1xGdGxMYW5lcy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Rating/src/BTSS.Rating/RatingEngine/BTSS.Rating.Admin/Components/Pages/Rates/Lcl.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xSYXRlc1xMY2wucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Rating/src/BTSS.Rating/RatingEngine/BTSS.Rating.Admin/Components/Pages/Rates/LtlBase.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xSYXRlc1xMdGxCYXNlLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Rating/src/BTSS.Rating/RatingEngine/BTSS.Rating.Admin/Components/Pages/Rates/LtlDiscounts.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xSYXRlc1xMdGxEaXNjb3VudHMucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Rating/src/BTSS.Rating/RatingEngine/BTSS.Rating.Admin/Components/Pages/Reports.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xSZXBvcnRzLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Rating/src/BTSS.Rating/RatingEngine/BTSS.Rating.Admin/Components/Routes.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xSb3V0ZXMucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Rating/src/BTSS.Rating/RatingEngine/BTSS.Rating.Admin/Components/_Imports.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xfSW1wb3J0cy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Rating/src/BTSS.Rating/RatingEngine/BTSS.Rating.Admin/Components/Layout/ReconnectModal.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xMYXlvdXRcUmVjb25uZWN0TW9kYWwucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-c80xigt38a

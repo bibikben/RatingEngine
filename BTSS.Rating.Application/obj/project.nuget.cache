@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "dgSpecHash": "RTNJL73UeBU=",
+  "success": true,
+  "projectFilePath": "C:\\Rating\\src\\BTSS.Rating\\RatingEngine\\BTSS.Rating.Application\\BTSS.Rating.Application.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\benbi\\.nuget\\packages\\microsoft.extensions.configuration.abstractions\\10.0.3\\microsoft.extensions.configuration.abstractions.10.0.3.nupkg.sha512",
+    "C:\\Users\\benbi\\.nuget\\packages\\microsoft.extensions.dependencyinjection.abstractions\\10.0.3\\microsoft.extensions.dependencyinjection.abstractions.10.0.3.nupkg.sha512",
+    "C:\\Users\\benbi\\.nuget\\packages\\microsoft.extensions.primitives\\10.0.3\\microsoft.extensions.primitives.10.0.3.nupkg.sha512"
+  ],
+  "logs": []
+}

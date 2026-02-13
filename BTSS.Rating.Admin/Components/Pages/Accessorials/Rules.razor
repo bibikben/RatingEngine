@@ -1,0 +1,134 @@
+@page "/accessorials/rules"
+@using Microsoft.EntityFrameworkCore
+@using BTSS.Rating.Infrastructure.Persistence
+@using BTSS.Rating.Infrastructure.Persistence.Entities
+@using BTSS.Rating.Persistence
+@inject RatingDbContext Db
+@inject DialogService DialogService
+@inject NotificationService NotificationService
+
+<h3>Accessorial Rules</h3>
+
+<RadzenCard>
+  <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="1rem" class="rz-mb-2">
+    <RadzenDropDown TValue="long?" Data="@contractVersions" TextProperty="Label" ValueProperty="ContractVersionId"
+                    @bind-Value="selectedContractVersionId" Placeholder="Select Contract Version" Style="min-width: 340px"
+                    Change="@OnVersionChange" />
+    <RadzenButton Icon="add_circle_outline" Text="Add" Disabled="@(selectedContractVersionId is null)" Click="@AddRow" />
+  </RadzenStack>
+
+  <RadzenDataGrid @ref="grid" Data="@rows" TItem="AccessorialRule"
+                  AllowFiltering="true" AllowSorting="true" AllowPaging="true" PageSize="15"
+                  EditMode="DataGridEditMode.Single"
+                  RowUpdate="@OnUpdate" RowCreate="@OnCreate">
+    <Columns>
+      <RadzenDataGridColumn TItem="AccessorialRule" Property="AccessorialRuleId" Title="Id" Width="90px" />
+      <RadzenDataGridColumn TItem="AccessorialRule" Property="ContractVersionId" Title="ContractVersionId" Width="140px" />
+      <RadzenDataGridColumn TItem="AccessorialRule" Property="AccessorialId" Title="AccessorialId" Width="120px" />
+      <RadzenDataGridColumn TItem="AccessorialRule" Property="RuleName" Title="RuleName" Width="160px" />
+      <RadzenDataGridColumn TItem="AccessorialRule" Property="ConditionExpression" Title="ConditionExpression" Width="240px" />
+      <RadzenDataGridColumn TItem="AccessorialRule" Property="StackingPolicy" Title="Stacking" Width="120px" />
+      <RadzenDataGridColumn TItem="AccessorialRule" Property="Priority" Title="Priority" Width="90px" />
+      <RadzenDataGridColumn TItem="AccessorialRule" Property="IsEnabled" Title="Enabled" Width="100px" />
+      <RadzenDataGridColumn TItem="AccessorialRule" Property="Note" Title="Note" />
+
+      <RadzenDataGridColumn TItem="AccessorialRule" Context="r" Title="Actions" Width="170px" Filterable="false" Sortable="false">
+        <Template Context="r">
+          <RadzenButton Icon="edit" Size="ButtonSize.Small" Click="@(() => grid!.EditRow(r))" class="rz-mr-1" />
+          <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Size="ButtonSize.Small" Click="@(() => DeleteRow(r))" />
+        </Template>
+        <EditTemplate Context="r">
+          <RadzenButton Icon="save" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Primary" Click="@(() => grid!.UpdateRow(r))" class="rz-mr-1" />
+          <RadzenButton Icon="cancel" Size="ButtonSize.Small" Click="@(() => grid!.CancelEditRow(r))" />
+        </EditTemplate>
+      </RadzenDataGridColumn>
+    </Columns>
+  </RadzenDataGrid>
+</RadzenCard>
+
+@code {
+  private RadzenDataGrid<AccessorialRule>? grid;
+
+  private long? selectedContractVersionId;
+  private List<AccessorialRule> rows = new();
+
+  private List<ContractVersionPick> contractVersions = new();
+
+  protected override async Task OnInitializedAsync()
+  {
+    contractVersions = await Db.ContractVersions.AsNoTracking()
+      .OrderByDescending(v => v.ContractVersionId)
+      .Select(v => new ContractVersionPick(v.ContractVersionId, $"{v.ContractId} - v{v.VersionNo} ({v.PublishStatus}) {v.EffectiveStart}..{v.EffectiveEnd}"))
+      .ToListAsync();
+  }
+
+  private async Task OnVersionChange(object _)
+  {
+    await LoadRows();
+  }
+
+  private async Task LoadRows()
+  {
+    if (selectedContractVersionId is null) { rows = new(); return; }
+
+    rows = await Db.AccessorialRules.AsNoTracking()
+      .Where(x => x.ContractVersionId == selectedContractVersionId.Value)
+      .OrderByDescending(x => x.AccessorialRuleId)
+      .ToListAsync();
+  }
+
+  private async Task AddRow()
+  {
+    if (selectedContractVersionId is null) return;
+
+    var r = new AccessorialRule
+    {
+      ContractVersionId = selectedContractVersionId.Value,
+      AccessorialId = 1,
+      RuleName = "New Rule",
+      ConditionExpression = "true",
+      StackingPolicy = "Stack",
+      Priority = 100,
+      IsEnabled = true,
+      CreatedAt = DateTime.UtcNow
+    };
+
+    rows.Insert(0, r);
+    await grid!.InsertRow(r);
+  }
+
+  private async Task OnCreate(AccessorialRule r)
+  {
+    Db.AccessorialRules.Add(r);
+    await Db.SaveChangesAsync();
+    await LoadRows();
+    await grid!.Reload();
+    Notify("Created.");
+  }
+
+  private async Task OnUpdate(AccessorialRule r)
+  {
+    Db.AccessorialRules.Update(r);
+    await Db.SaveChangesAsync();
+    await LoadRows();
+    await grid!.Reload();
+    Notify("Saved.");
+  }
+
+  private async Task DeleteRow(AccessorialRule r)
+  {
+    var ok = await DialogService.Confirm("Delete this rule?", "Confirm", new ConfirmOptions(){ OkButtonText="Delete", CancelButtonText="Cancel" });
+    if (ok != true) return;
+
+    Db.AccessorialRules.Remove(r);
+    await Db.SaveChangesAsync();
+    await LoadRows();
+    await grid!.Reload();
+    Notify("Deleted.", NotificationSeverity.Warning);
+  }
+
+  private void Notify(string message, NotificationSeverity severity = NotificationSeverity.Info)
+    => NotificationService.Notify(new NotificationMessage{ Severity=severity, Summary=message, Duration=3000 });
+
+  private sealed record ContractVersionPick(long ContractVersionId, string Label);
+}

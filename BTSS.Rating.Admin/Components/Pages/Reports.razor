@@ -1,0 +1,107 @@
+@page "/reports"
+@using Microsoft.EntityFrameworkCore
+@using BTSS.Rating.Infrastructure.Persistence
+@using BTSS.Rating.Infrastructure.Persistence.Entities
+@using BTSS.Rating.Persistence
+@inject RatingDbContext Db
+
+<h3>Reports</h3>
+
+<RadzenTabs>
+  <Tabs>
+    <RadzenTabsItem Text="Rate Quotes">
+      <RadzenRow Gap="1rem">
+        <RadzenColumn Size="12" SizeMD="5">
+          <RadzenCard>
+            <RadzenText Text="RateQuotes (latest 200)" TextStyle="TextStyle.Subtitle2" class="rz-mb-2" />
+            <RadzenDataGrid Data="@quotes" TItem="RateQuote" AllowPaging="true" PageSize="15"
+                            AllowSorting="true" AllowFiltering="true" RowSelect="@OnQuoteSelect">
+              <Columns>
+                <RadzenDataGridColumn TItem="RateQuote" Property="RateQuoteId" Title="Id" Width="90px" />
+                <RadzenDataGridColumn TItem="RateQuote" Property="RequestId" Title="RequestId" Width="160px" />
+                <RadzenDataGridColumn TItem="RateQuote" Property="AccountId" Title="AccountId" Width="110px" />
+                <RadzenDataGridColumn TItem="RateQuote" Property="Mode" Title="Mode" Width="80px" />
+                <RadzenDataGridColumn TItem="RateQuote" Property="CurrencyCode" Title="Cur" Width="80px" />
+                <RadzenDataGridColumn TItem="RateQuote" Property="RateDate" Title="RateDate" Width="120px" />
+                <RadzenDataGridColumn TItem="RateQuote" Property="CreatedAt" Title="CreatedAt" Width="160px" />
+              </Columns>
+            </RadzenDataGrid>
+          </RadzenCard>
+        </RadzenColumn>
+
+        <RadzenColumn Size="12" SizeMD="7">
+          <RadzenCard>
+            <RadzenText Text="Results for selected quote" TextStyle="TextStyle.Subtitle2" class="rz-mb-2" />
+            <RadzenDataGrid Data="@results" TItem="RateQuoteResult" AllowPaging="true" PageSize="10"
+                            AllowSorting="true" AllowFiltering="true" RowSelect="@OnResultSelect">
+              <Columns>
+                <RadzenDataGridColumn TItem="RateQuoteResult" Property="RateQuoteResultId" Title="ResultId" Width="110px" />
+                <RadzenDataGridColumn TItem="RateQuoteResult" Property="ProviderId" Title="ProviderId" Width="110px" />
+                <RadzenDataGridColumn TItem="RateQuoteResult" Property="ContractId" Title="ContractId" Width="110px" />
+                <RadzenDataGridColumn TItem="RateQuoteResult" Property="ContractVersionId" Title="ContractVersionId" Width="140px" />
+                <RadzenDataGridColumn TItem="RateQuoteResult" Property="Rank" Title="Rank" Width="80px" />
+                <RadzenDataGridColumn TItem="RateQuoteResult" Property="TotalAmount" Title="Total" Width="120px" />
+                <RadzenDataGridColumn TItem="RateQuoteResult" Property="TransitDays" Title="Transit" Width="90px" />
+                <RadzenDataGridColumn TItem="RateQuoteResult" Property="CreatedAt" Title="CreatedAt" Width="160px" />
+              </Columns>
+            </RadzenDataGrid>
+          </RadzenCard>
+
+          <RadzenCard class="rz-mt-3">
+            <RadzenText Text="Charges for selected result" TextStyle="TextStyle.Subtitle2" class="rz-mb-2" />
+            <RadzenDataGrid Data="@charges" TItem="RateQuoteChargeLine" AllowPaging="true" PageSize="10"
+                            AllowSorting="true" AllowFiltering="true">
+              <Columns>
+                <RadzenDataGridColumn TItem="RateQuoteChargeLine" Property="SequenceNo" Title="#" Width="70px" />
+                <RadzenDataGridColumn TItem="RateQuoteChargeLine" Property="CanonicalChargeType" Title="Type" Width="140px" />
+                <RadzenDataGridColumn TItem="RateQuoteChargeLine" Property="AccessorialCode" Title="Acc" Width="110px" />
+                <RadzenDataGridColumn TItem="RateQuoteChargeLine" Property="Description" Title="Description" />
+                <RadzenDataGridColumn TItem="RateQuoteChargeLine" Property="Quantity" Title="Qty" Width="90px" />
+                <RadzenDataGridColumn TItem="RateQuoteChargeLine" Property="Rate" Title="Rate" Width="90px" />
+                <RadzenDataGridColumn TItem="RateQuoteChargeLine" Property="Amount" Title="Amount" Width="110px" />
+              </Columns>
+            </RadzenDataGrid>
+          </RadzenCard>
+        </RadzenColumn>
+      </RadzenRow>
+    </RadzenTabsItem>
+
+    <RadzenTabsItem Text="Contract Utilization (stub)">
+      <RadzenCard>
+        <p>Next step: aggregate RateQuoteResults by ContractId/ContractVersionId, filterable by date/customer/mode.</p>
+      </RadzenCard>
+    </RadzenTabsItem>
+  </Tabs>
+</RadzenTabs>
+
+@code {
+  private List<RateQuote> quotes = new();
+  private List<RateQuoteResult> results = new();
+  private List<RateQuoteChargeLine> charges = new();
+
+  protected override async Task OnInitializedAsync()
+  {
+    quotes = await Db.RateQuotes.AsNoTracking()
+      .OrderByDescending(q => q.RateQuoteId)
+      .Take(200)
+      .ToListAsync();
+  }
+
+  private async Task OnQuoteSelect(RateQuote q)
+  {
+    results = await Db.RateQuoteResults.AsNoTracking()
+      .Where(r => r.RateQuoteId == q.RateQuoteId)
+      .OrderBy(r => r.Rank)
+      .ToListAsync();
+
+    charges = new();
+  }
+
+  private async Task OnResultSelect(RateQuoteResult r)
+  {
+    charges = await Db.RateQuoteChargeLines.AsNoTracking()
+      .Where(c => c.RateQuoteResultId == r.RateQuoteResultId)
+      .OrderBy(c => c.SequenceNo)
+      .ToListAsync();
+  }
+}

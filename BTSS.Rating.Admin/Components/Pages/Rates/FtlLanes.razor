@@ -1,0 +1,132 @@
+@page "/rates/ftl-lanes"
+@using Microsoft.EntityFrameworkCore
+@using BTSS.Rating.Infrastructure.Persistence
+@using BTSS.Rating.Infrastructure.Persistence.Entities
+@using BTSS.Rating.Persistence
+@inject RatingDbContext Db
+@inject DialogService DialogService
+@inject NotificationService NotificationService
+
+<h3>FTL Lane Rates</h3>
+
+<RadzenCard>
+  <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="1rem" class="rz-mb-2">
+    <RadzenDropDown TValue="long?" Data="@contractVersions" TextProperty="Label" ValueProperty="ContractVersionId"
+                    @bind-Value="selectedContractVersionId" Placeholder="Select Contract Version" Style="min-width: 340px"
+                    Change="@OnVersionChange" />
+    <RadzenButton Icon="add_circle_outline" Text="Add" Disabled="@(selectedContractVersionId is null)" Click="@AddRow" />
+  </RadzenStack>
+
+  <RadzenDataGrid @ref="grid" Data="@rows" TItem="FtlLaneRate"
+                  AllowFiltering="true" AllowSorting="true" AllowPaging="true" PageSize="15"
+                  EditMode="DataGridEditMode.Single"
+                  RowUpdate="@OnUpdate" RowCreate="@OnCreate">
+    <Columns>
+      <RadzenDataGridColumn TItem="FtlLaneRate" Property="FtlLaneRateId" Title="Id" Width="90px" />
+      <RadzenDataGridColumn TItem="FtlLaneRate" Property="ContractVersionId" Title="ContractVersionId" Width="140px" />
+      <RadzenDataGridColumn TItem="FtlLaneRate" Property="OriginRegionId" Title="OriginRegion" Width="130px" />
+      <RadzenDataGridColumn TItem="FtlLaneRate" Property="DestRegionId" Title="DestRegion" Width="130px" />
+      <RadzenDataGridColumn TItem="FtlLaneRate" Property="EquipmentType" Title="Equipment" Width="140px" />
+      <RadzenDataGridColumn TItem="FtlLaneRate" Property="RateType" Title="RateType" Width="110px" />
+      <RadzenDataGridColumn TItem="FtlLaneRate" Property="RateValue" Title="RateValue" Width="120px" />
+      <RadzenDataGridColumn TItem="FtlLaneRate" Property="MinimumCharge" Title="MinCharge" Width="120px" />
+      <RadzenDataGridColumn TItem="FtlLaneRate" Property="IncludedStops" Title="Incl Stops" Width="110px" />
+      <RadzenDataGridColumn TItem="FtlLaneRate" Property="EffectiveDate" Title="Effective" Width="120px" />
+      <RadzenDataGridColumn TItem="FtlLaneRate" Property="ExpirationDate" Title="Expires" Width="120px" />
+
+      <RadzenDataGridColumn TItem="FtlLaneRate" Context="r" Title="Actions" Width="170px" Filterable="false" Sortable="false">
+        <Template Context="r">
+          <RadzenButton Icon="edit" Size="ButtonSize.Small" Click="@(() => grid!.EditRow(r))" class="rz-mr-1" />
+          <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Size="ButtonSize.Small" Click="@(() => DeleteRow(r))" />
+        </Template>
+        <EditTemplate Context="r">
+          <RadzenButton Icon="save" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Primary" Click="@(() => grid!.UpdateRow(r))" class="rz-mr-1" />
+          <RadzenButton Icon="cancel" Size="ButtonSize.Small" Click="@(() => grid!.CancelEditRow(r))" />
+        </EditTemplate>
+      </RadzenDataGridColumn>
+    </Columns>
+  </RadzenDataGrid>
+</RadzenCard>
+
+@code {
+  private RadzenDataGrid<FtlLaneRate>? grid;
+
+  private long? selectedContractVersionId;
+  private List<FtlLaneRate> rows = new();
+
+  private List<ContractVersionPick> contractVersions = new();
+
+  protected override async Task OnInitializedAsync()
+  {
+    contractVersions = await Db.ContractVersions.AsNoTracking()
+      .OrderByDescending(v => v.ContractVersionId)
+      .Select(v => new ContractVersionPick(v.ContractVersionId, $"{
+        v.ContractId} - v{v.VersionNo} ({v.PublishStatus}) {v.EffectiveStart}..{v.EffectiveEnd}"))
+      .ToListAsync();
+  }
+
+  private async Task OnVersionChange(object _)
+  {
+    await LoadRows();
+  }
+
+  private async Task LoadRows()
+  {
+    if (selectedContractVersionId is null)
+    {
+      rows = new();
+      return;
+    }
+
+    rows = await Db.FtlLaneRates.AsNoTracking()
+      .Where(x => x.ContractVersionId == selectedContractVersionId.Value)
+      .OrderByDescending(x => x.FtlLaneRateId)
+      .ToListAsync();
+  }
+
+  private async Task AddRow()
+  {
+    if (selectedContractVersionId is null) return;
+
+    var r = new FtlLaneRate { ContractVersionId = selectedContractVersionId.Value, OriginRegionId = 1, DestRegionId = 1, EquipmentType = "DRYVAN", RateType = "FLAT", RateValue = 0m, IncludedStops = 1, EffectiveDate = DateOnly.FromDateTime(DateTime.UtcNow.Date), ExpirationDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddYears(1)) };
+    rows.Insert(0, r);
+    await grid!.InsertRow(r);
+  }
+
+  private async Task OnCreate(FtlLaneRate r)
+  {
+    Db.FtlLaneRates.Add(r);
+    await Db.SaveChangesAsync();
+    await LoadRows();
+    await grid!.Reload();
+    Notify("Created.");
+  }
+
+  private async Task OnUpdate(FtlLaneRate r)
+  {
+    Db.FtlLaneRates.Update(r);
+    await Db.SaveChangesAsync();
+    await LoadRows();
+    await grid!.Reload();
+    Notify("Saved.");
+  }
+
+  private async Task DeleteRow(FtlLaneRate r)
+  {
+    var ok = await DialogService.Confirm("Delete this row?", "Confirm", new ConfirmOptions(){ OkButtonText="Delete", CancelButtonText="Cancel" });
+    if (ok != true) return;
+
+    Db.FtlLaneRates.Remove(r);
+    await Db.SaveChangesAsync();
+    await LoadRows();
+    await grid!.Reload();
+    Notify("Deleted.", NotificationSeverity.Warning);
+  }
+
+  private void Notify(string message, NotificationSeverity severity = NotificationSeverity.Info)
+  {
+    NotificationService.Notify(new NotificationMessage{ Severity=severity, Summary=message, Duration=3000 });
+  }
+
+  private sealed record ContractVersionPick(long ContractVersionId, string Label);
+}

@@ -1,0 +1,83 @@
+@inherits LayoutComponentBase
+@inject CookieThemeService CookieThemeService
+<RadzenComponents />
+
+<RadzenLayout>
+    <RadzenHeader>
+        <RadzenRow JustifyContent="JustifyContent.Start" AlignItems="AlignItems.Center" Gap="0">
+            <RadzenColumn Size="5">
+                <RadzenSidebarToggle Click="@SidebarToggleClick"></RadzenSidebarToggle>
+            </RadzenColumn>
+            <RadzenColumn Size="7">
+                <RadzenStack AlignItems="AlignItems.Center" Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.End" Gap="0.5rem" class="rz-px-2">
+                    <RadzenAppearanceToggle />
+                </RadzenStack>
+            </RadzenColumn>
+        </RadzenRow>
+    </RadzenHeader>
+    <RadzenBody Expanded="@sidebarExpanded">
+        <RadzenRow class="rz-mx-auto rz-px-4 rz-pt-2 rz-pt-md-4 rz-pt-lg-6 rz-pt-xl-12 rz-pb-2 rz-pb-lg-12" Style="max-width: 1440px;">
+            <RadzenColumn Size="12">
+                @Body
+            </RadzenColumn>
+        </RadzenRow>
+    </RadzenBody>
+    <RadzenSidebar @bind-Expanded="@sidebarExpanded">
+        <RadzenStack AlignItems="Radzen.AlignItems.Center" class="rz-py-4 rz-py-lg-6" Style="padding: var(--rz-panel-menu-item-padding); border-bottom: var(--rz-panel-menu-item-border);">
+            <RadzenImage Path="images/logo.png"  style="width: 48px; height: 48px;" AlternateText="Application logo"></RadzenImage>
+            <RadzenText Text="BTSS.Rating.Admin" TextStyle="Radzen.Blazor.TextStyle.Subtitle1" class="rz-mb-0" style="color: var(--rz-sidebar-color);" />
+        </RadzenStack>
+        <RadzenPanelMenu>
+    <RadzenPanelMenuItem Text="Home" Path="" Icon="home" />
+    <RadzenPanelMenuItem Text="Contracts" Path="contracts" Icon="description" />
+    <RadzenPanelMenuItem Text="Lanes" Path="lanes" Icon="alt_route" />
+    <RadzenPanelMenuItem Text="Rates" Icon="attach_money">
+        <RadzenPanelMenuItem Text="LTL Base" Path="rates/ltl-base" />
+        <RadzenPanelMenuItem Text="LTL Discounts" Path="rates/ltl-discounts" />
+        <RadzenPanelMenuItem Text="FTL Lanes" Path="rates/ftl-lanes" />
+        <RadzenPanelMenuItem Text="FCL Containers" Path="rates/fcl-containers" />
+        <RadzenPanelMenuItem Text="LCL" Path="rates/lcl" />
+    </RadzenPanelMenuItem>
+    <RadzenPanelMenuItem Text="Accessorials" Icon="playlist_add">
+        <RadzenPanelMenuItem Text="Accessorials" Path="accessorials/list" />
+        <RadzenPanelMenuItem Text="Rules" Path="accessorials/rules" />
+        <RadzenPanelMenuItem Text="Contract Charges" Path="accessorials/contract-charges" />
+    </RadzenPanelMenuItem>
+    <RadzenPanelMenuItem Text="Fuel" Icon="local_gas_station">
+        <RadzenPanelMenuItem Text="Schedules" Path="fuel/schedules" />
+        <RadzenPanelMenuItem Text="Rows" Path="fuel/rows" />
+        <RadzenPanelMenuItem Text="Contract Rules" Path="fuel/contract-rules" />
+    </RadzenPanelMenuItem>
+    <RadzenPanelMenuItem Text="Preview Quote" Path="preview-quote" Icon="calculate" />
+    <RadzenPanelMenuItem Text="Reports" Path="reports" Icon="insights" />
+        </RadzenPanelMenu>
+        <RadzenStack AlignItems="Radzen.AlignItems.Center" Gap="0" class="rz-py-4 rz-py-lg-6" Style="padding: var(--rz-panel-menu-item-padding);">
+            <RadzenText Text="BTSS.Rating.Admin v1.0.0" TextStyle="Radzen.Blazor.TextStyle.Caption" TagName="Radzen.Blazor.TagName.P" TextAlign="Radzen.TextAlign.Center" />
+            <RadzenText Text="Copyright Ⓒ 2026" TextStyle="Radzen.Blazor.TextStyle.Caption" class="rz-mb-0" TagName="Radzen.Blazor.TagName.P" TextAlign="Radzen.TextAlign.Center" />
+        </RadzenStack>
+    </RadzenSidebar>
+</RadzenLayout>
+@code {
+    [Inject]
+    protected IJSRuntime JSRuntime { get; set; }
+
+    [Inject]
+    protected NavigationManager NavigationManager { get; set; }
+
+    [Inject]
+    protected DialogService DialogService { get; set; }
+
+    [Inject]
+    protected TooltipService TooltipService { get; set; }
+
+    [Inject]
+    protected ContextMenuService ContextMenuService { get; set; }
+
+    [Inject]
+    protected NotificationService NotificationService { get; set; }
+    private bool sidebarExpanded = true;
+    private void SidebarToggleClick()
+    {
+        sidebarExpanded = !sidebarExpanded;
+    }
+}

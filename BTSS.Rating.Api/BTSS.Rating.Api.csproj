@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+        <RootNamespace>BTSS.Rating</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.3" />
+    <PackageReference Include="Radzen.Blazor" Version="9.0.4" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\BTSS.Rating.Application\BTSS.Rating.Application.csproj" />
+    <ProjectReference Include="..\BTSS.Rating.Infrastructure\BTSS.Rating.Infrastructure.csproj" />
+    <ProjectReference Include="..\BTSS.Rating.Shared\BTSS.Rating.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

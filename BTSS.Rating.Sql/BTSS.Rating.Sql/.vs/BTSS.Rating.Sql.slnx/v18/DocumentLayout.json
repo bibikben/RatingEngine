@@ -1,0 +1,23 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Rating\\src\\BTSS.Rating\\RatingEngine\\BTSS.Rating.Sql\\BTSS.Rating.Sql\\",
+  "Documents": [],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 581,
+          "SelectedChildIndex": -1,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{e1989077-4c00-4d80-99c7-25932d7ffd82}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

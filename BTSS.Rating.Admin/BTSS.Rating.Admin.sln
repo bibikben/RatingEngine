@@ -1,0 +1,25 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.0.0
+MinimumVisualStudioVersion = 17.0.0.0
+
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BTSS.Rating.Admin", "BTSS.Rating.Admin.csproj", "{14CF9149-74C7-4E9F-B9D7-15D5BD9031CA}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{14CF9149-74C7-4E9F-B9D7-15D5BD9031CA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{14CF9149-74C7-4E9F-B9D7-15D5BD9031CA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{14CF9149-74C7-4E9F-B9D7-15D5BD9031CA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{14CF9149-74C7-4E9F-B9D7-15D5BD9031CA}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {42ED1723-0760-476D-92CA-9FADCDB3EF70}
+	EndGlobalSection
+EndGlobal

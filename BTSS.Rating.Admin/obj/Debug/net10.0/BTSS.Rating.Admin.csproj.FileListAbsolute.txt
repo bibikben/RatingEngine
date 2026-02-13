@@ -1,0 +1,9 @@
+C:\Rating\src\BTSS.Rating\RatingEngine\BTSS.Rating.Admin\obj\Debug\net10.0\EmbeddedAttribute.cs
+C:\Rating\src\BTSS.Rating\RatingEngine\BTSS.Rating.Admin\obj\Debug\net10.0\ValidatableTypeAttribute.cs
+C:\Rating\src\BTSS.Rating\RatingEngine\BTSS.Rating.Admin\obj\Debug\net10.0\BTSS.Rating.Admin.csproj.AssemblyReference.cache
+C:\Rating\src\BTSS.Rating\RatingEngine\BTSS.Rating.Admin\obj\Debug\net10.0\rpswa.dswa.cache.json
+C:\Rating\src\BTSS.Rating\RatingEngine\BTSS.Rating.Admin\obj\Debug\net10.0\BTSS.Rating.Admin.GeneratedMSBuildEditorConfig.editorconfig
+C:\Rating\src\BTSS.Rating\RatingEngine\BTSS.Rating.Admin\obj\Debug\net10.0\BTSS.Rating.Admin.AssemblyInfoInputs.cache
+C:\Rating\src\BTSS.Rating\RatingEngine\BTSS.Rating.Admin\obj\Debug\net10.0\BTSS.Rating.Admin.AssemblyInfo.cs
+C:\Rating\src\BTSS.Rating\RatingEngine\BTSS.Rating.Admin\obj\Debug\net10.0\BTSS.Rating.Admin.csproj.CoreCompileInputs.cache
+C:\Rating\src\BTSS.Rating\RatingEngine\BTSS.Rating.Admin\obj\Debug\net10.0\BTSS.Rating.Admin.MvcApplicationPartsAssemblyInfo.cache

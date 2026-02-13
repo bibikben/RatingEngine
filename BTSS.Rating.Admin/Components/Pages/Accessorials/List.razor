@@ -1,0 +1,89 @@
+@page "/accessorials/list"
+@using Microsoft.EntityFrameworkCore
+@using BTSS.Rating.Infrastructure.Persistence
+@using BTSS.Rating.Infrastructure.Persistence.Entities
+@using BTSS.Rating.Persistence
+@inject RatingDbContext Db
+@inject DialogService DialogService
+@inject NotificationService NotificationService
+
+<h3>Accessorials</h3>
+
+<RadzenCard>
+  <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" JustifyContent="JustifyContent.SpaceBetween" class="rz-mb-2">
+    <RadzenText Text="Accessorial Master List" TextStyle="TextStyle.Subtitle1" />
+    <RadzenButton Icon="add_circle_outline" Text="Add" Click="@AddRow" />
+  </RadzenStack>
+
+  <RadzenDataGrid @ref="grid" Data="@rows" TItem="Accessorial"
+                  AllowFiltering="true" AllowSorting="true" AllowPaging="true" PageSize="15"
+                  EditMode="DataGridEditMode.Single"
+                  RowUpdate="@OnUpdate" RowCreate="@OnCreate">
+    <Columns>
+      <RadzenDataGridColumn TItem="Accessorial" Property="AccessorialId" Title="Id" Width="90px" />
+      <RadzenDataGridColumn TItem="Accessorial" Property="Code" Title="Code" Width="140px" />
+      <RadzenDataGridColumn TItem="Accessorial" Property="Description" Title="Description" />
+      <RadzenDataGridColumn TItem="Accessorial" Property="ModeApplicabilityJson" Title="ModeApplicabilityJson" Width="220px" />
+      <RadzenDataGridColumn TItem="Accessorial" Context="r" Title="Actions" Width="170px" Filterable="false" Sortable="false">
+        <Template Context="r">
+          <RadzenButton Icon="edit" Size="ButtonSize.Small" Click="@(() => grid!.EditRow(r))" class="rz-mr-1" />
+          <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Size="ButtonSize.Small" Click="@(() => DeleteRow(r))" />
+        </Template>
+        <EditTemplate Context="r">
+          <RadzenButton Icon="save" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Primary" Click="@(() => grid!.UpdateRow(r))" class="rz-mr-1" />
+          <RadzenButton Icon="cancel" Size="ButtonSize.Small" Click="@(() => grid!.CancelEditRow(r))" />
+        </EditTemplate>
+      </RadzenDataGridColumn>
+    </Columns>
+  </RadzenDataGrid>
+</RadzenCard>
+
+@code {
+  private RadzenDataGrid<Accessorial>? grid;
+  private List<Accessorial> rows = new();
+
+  protected override async Task OnInitializedAsync()
+  {
+    rows = await Db.Accessorials.AsNoTracking().OrderBy(a => a.Code).ToListAsync();
+  }
+
+  private async Task AddRow()
+  {
+    var r = new Accessorial { Code = "NEW", Description = "New accessorial" };
+    rows.Insert(0, r);
+    await grid!.InsertRow(r);
+  }
+
+  private async Task OnCreate(Accessorial r)
+  {
+    Db.Accessorials.Add(r);
+    await Db.SaveChangesAsync();
+    rows = await Db.Accessorials.AsNoTracking().OrderBy(a => a.Code).ToListAsync();
+    await grid!.Reload();
+    Notify("Created.");
+  }
+
+  private async Task OnUpdate(Accessorial r)
+  {
+    Db.Accessorials.Update(r);
+    await Db.SaveChangesAsync();
+    rows = await Db.Accessorials.AsNoTracking().OrderBy(a => a.Code).ToListAsync();
+    await grid!.Reload();
+    Notify("Saved.");
+  }
+
+  private async Task DeleteRow(Accessorial r)
+  {
+    var ok = await DialogService.Confirm("Delete this accessorial?", "Confirm", new ConfirmOptions(){ OkButtonText="Delete", CancelButtonText="Cancel" });
+    if (ok != true) return;
+
+    Db.Accessorials.Remove(r);
+    await Db.SaveChangesAsync();
+    rows = await Db.Accessorials.AsNoTracking().OrderBy(a => a.Code).ToListAsync();
+    await grid!.Reload();
+    Notify("Deleted.", NotificationSeverity.Warning);
+  }
+
+  private void Notify(string message, NotificationSeverity severity = NotificationSeverity.Info)
+    => NotificationService.Notify(new NotificationMessage{ Severity=severity, Summary=message, Duration=3000 });
+}

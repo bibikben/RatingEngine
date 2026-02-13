@@ -1,0 +1,90 @@
+@page "/fuel/schedules"
+@using Microsoft.EntityFrameworkCore
+@using BTSS.Rating.Infrastructure.Persistence
+@using BTSS.Rating.Infrastructure.Persistence.Entities
+@using BTSS.Rating.Persistence
+@inject RatingDbContext Db
+@inject DialogService DialogService
+@inject NotificationService NotificationService
+
+<h3>Fuel Schedules</h3>
+
+<RadzenCard>
+  <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" JustifyContent="JustifyContent.SpaceBetween" class="rz-mb-2">
+    <RadzenText Text="Schedules" TextStyle="TextStyle.Subtitle1" />
+    <RadzenButton Icon="add_circle_outline" Text="Add" Click="@AddRow" />
+  </RadzenStack>
+
+  <RadzenDataGrid @ref="grid" Data="@rows" TItem="FuelSchedule"
+                  AllowFiltering="true" AllowSorting="true" AllowPaging="true" PageSize="15"
+                  EditMode="DataGridEditMode.Single"
+                  RowUpdate="@OnUpdate" RowCreate="@OnCreate">
+    <Columns>
+      <RadzenDataGridColumn TItem="FuelSchedule" Property="FuelScheduleId" Title="Id" Width="90px" />
+      <RadzenDataGridColumn TItem="FuelSchedule" Property="Name" Title="Name" Width="200px" />
+      <RadzenDataGridColumn TItem="FuelSchedule" Property="IndexType" Title="IndexType" Width="140px" />
+      <RadzenDataGridColumn TItem="FuelSchedule" Property="Unit" Title="Unit" Width="110px" />
+      <RadzenDataGridColumn TItem="FuelSchedule" Property="Notes" Title="Notes" />
+      <RadzenDataGridColumn TItem="FuelSchedule" Context="r" Title="Actions" Width="170px" Filterable="false" Sortable="false">
+        <Template Context="r">
+          <RadzenButton Icon="edit" Size="ButtonSize.Small" Click="@(() => grid!.EditRow(r))" class="rz-mr-1" />
+          <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Size="ButtonSize.Small" Click="@(() => DeleteRow(r))" />
+        </Template>
+        <EditTemplate Context="r">
+          <RadzenButton Icon="save" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Primary" Click="@(() => grid!.UpdateRow(r))" class="rz-mr-1" />
+          <RadzenButton Icon="cancel" Size="ButtonSize.Small" Click="@(() => grid!.CancelEditRow(r))" />
+        </EditTemplate>
+      </RadzenDataGridColumn>
+    </Columns>
+  </RadzenDataGrid>
+</RadzenCard>
+
+@code {
+  private RadzenDataGrid<FuelSchedule>? grid;
+  private List<FuelSchedule> rows = new();
+
+  protected override async Task OnInitializedAsync()
+  {
+    rows = await Db.FuelSchedules.AsNoTracking().OrderByDescending(x => x.FuelScheduleId).ToListAsync();
+  }
+
+  private async Task AddRow()
+  {
+    var r = new FuelSchedule { Name="New Schedule", IndexType="DOE_DIESEL", Unit="USD/GAL" };
+    rows.Insert(0, r);
+    await grid!.InsertRow(r);
+  }
+
+  private async Task OnCreate(FuelSchedule r)
+  {
+    Db.FuelSchedules.Add(r);
+    await Db.SaveChangesAsync();
+    rows = await Db.FuelSchedules.AsNoTracking().OrderByDescending(x => x.FuelScheduleId).ToListAsync();
+    await grid!.Reload();
+    Notify("Created.");
+  }
+
+  private async Task OnUpdate(FuelSchedule r)
+  {
+    Db.FuelSchedules.Update(r);
+    await Db.SaveChangesAsync();
+    rows = await Db.FuelSchedules.AsNoTracking().OrderByDescending(x => x.FuelScheduleId).ToListAsync();
+    await grid!.Reload();
+    Notify("Saved.");
+  }
+
+  private async Task DeleteRow(FuelSchedule r)
+  {
+    var ok = await DialogService.Confirm("Delete this schedule?", "Confirm", new ConfirmOptions(){ OkButtonText="Delete", CancelButtonText="Cancel" });
+    if (ok != true) return;
+
+    Db.FuelSchedules.Remove(r);
+    await Db.SaveChangesAsync();
+    rows = await Db.FuelSchedules.AsNoTracking().OrderByDescending(x => x.FuelScheduleId).ToListAsync();
+    await grid!.Reload();
+    Notify("Deleted.", NotificationSeverity.Warning);
+  }
+
+  private void Notify(string message, NotificationSeverity severity = NotificationSeverity.Info)
+    => NotificationService.Notify(new NotificationMessage{ Severity=severity, Summary=message, Duration=3000 });
+}
