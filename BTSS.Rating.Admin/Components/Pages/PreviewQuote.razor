@@ -1,153 +1,209 @@
 @page "/preview-quote"
-@using BTSS.Rating.Admin.Services
-@using BTSS.Rating.Shared.Contracts
 @using BTSS.Rating.Shared.Enums
-@inject RatingApiClient RatingApi
-@inject NotificationService NotificationService
+@using BTSS.Rating.Shared.Contracts
+@inject BTSS.Rating.Admin.Services.RatingApiClient Api
+@inject NotificationService Notifications
 
-<h3>Preview Quote (API)</h3>
+<h3>Preview Quote</h3>
 
-<RadzenRow Gap="1rem">
-  <RadzenColumn Size="12" SizeMD="5">
-    <RadzenCard>
-      <RadzenTemplateForm Data="@model" Submit="@OnSubmit">
-        <RadzenStack Gap="0.75rem">
-          <RadzenDropDown TValue="ShipmentMode" Data="@modes" @bind-Value="model.Mode" TextProperty="Text" ValueProperty="Value" Name="Mode" />
-          <RadzenTextBox @bind-Value="model.CustomerId" Name="CustomerId" Placeholder="CustomerId (optional)" />
-          <RadzenTextBox @bind-Value="model.ContractId" Name="ContractId" Placeholder="ContractId (optional)" />
+<RadzenCard class="rz-mb-3">
+    <RadzenTemplateForm Data="@model" Submit="@OnQuote">
+        <RadzenRow Gap="1rem">
+            <RadzenColumn Size="12" SizeMD="3">
+                <RadzenDropDown @bind-Value="model.Mode" Data="@modes" TextProperty="Text" ValueProperty="Value" Name="Mode" Placeholder="Mode" Style="width:100%" />
+            </RadzenColumn>
+            <RadzenColumn Size="12" SizeMD="3">
+                <RadzenTextBox @bind-Value="model.CustomerId" Name="CustomerId" Placeholder="CustomerId / AccountCode" Style="width:100%" />
+            </RadzenColumn>
+            <RadzenColumn Size="12" SizeMD="3">
+                <RadzenTextBox @bind-Value="model.ContractId" Name="ContractId" Placeholder="ContractId (optional)" Style="width:100%" />
+            </RadzenColumn>
+            <RadzenColumn Size="12" SizeMD="3">
+                <RadzenDatePicker @bind-Value="shipDate" Name="ShipDate" Style="width:100%" />
+            </RadzenColumn>
 
-          <RadzenFieldset Text="Origin">
-            <RadzenStack Gap="0.5rem">
-              <RadzenTextBox @bind-Value="model.Origin.Country" Placeholder="Country" />
-              <RadzenTextBox @bind-Value="model.Origin.StateOrProvince" Placeholder="State/Province" />
-              <RadzenTextBox @bind-Value="model.Origin.City" Placeholder="City" />
-              <RadzenTextBox @bind-Value="model.Origin.PostalCode" Placeholder="Postal Code" />
-            </RadzenStack>
-          </RadzenFieldset>
+            <RadzenColumn Size="12" SizeMD="3">
+                <RadzenTextBox @bind-Value="model.RequestId" Name="RequestId" Placeholder="RequestId (GUID for idempotency)" Style="width:100%" />
+            </RadzenColumn>
+            <RadzenColumn Size="12" SizeMD="3">
+                <RadzenTextBox @bind-Value="model.OriginPort" Name="OriginPort" Placeholder="Origin Port (FCL/LCL)" Style="width:100%" />
+            </RadzenColumn>
+            <RadzenColumn Size="12" SizeMD="3">
+                <RadzenTextBox @bind-Value="model.DestinationPort" Name="DestinationPort" Placeholder="Destination Port (FCL/LCL)" Style="width:100%" />
+            </RadzenColumn>
+            <RadzenColumn Size="12" SizeMD="3">
+                <RadzenTextBox @bind-Value="model.EquipmentType" Name="EquipmentType" Placeholder="Equipment Type (FTL)" Style="width:100%" />
+            </RadzenColumn>
 
-          <RadzenFieldset Text="Destination">
-            <RadzenStack Gap="0.5rem">
-              <RadzenTextBox @bind-Value="model.Destination.Country" Placeholder="Country" />
-              <RadzenTextBox @bind-Value="model.Destination.StateOrProvince" Placeholder="State/Province" />
-              <RadzenTextBox @bind-Value="model.Destination.City" Placeholder="City" />
-              <RadzenTextBox @bind-Value="model.Destination.PostalCode" Placeholder="Postal Code" />
-            </RadzenStack>
-          </RadzenFieldset>
+            <RadzenColumn Size="12" SizeMD="3">
+                <RadzenTextBox @bind-Value="model.ContainerType" Name="ContainerType" Placeholder="Container Type (FCL)" Style="width:100%" />
+            </RadzenColumn>
+            <RadzenColumn Size="12" SizeMD="3">
+                <RadzenTextBox @bind-Value="model.ServiceLevel" Name="ServiceLevel" Placeholder="Service Level" Style="width:100%" />
+            </RadzenColumn>
+            <RadzenColumn Size="12" SizeMD="3">
+                <RadzenTextBox @bind-Value="model.CommodityCode" Name="CommodityCode" Placeholder="Commodity Code" Style="width:100%" />
+            </RadzenColumn>
+            <RadzenColumn Size="12" SizeMD="3">
+                <RadzenNumeric @bind-Value="model.DeclaredValue" Name="DeclaredValue" Placeholder="Declared Value" Style="width:100%" />
+            </RadzenColumn>
 
-          <RadzenFieldset Text="Line">
-            <RadzenStack Gap="0.5rem">
-              <RadzenNumeric TValue="decimal" @bind-Value="line.Weight" Placeholder="Weight" />
-              <RadzenNumeric TValue="int" @bind-Value="line.Pieces" Placeholder="Pieces" />
-              <RadzenTextBox @bind-Value="line.FreightClass" Placeholder="Freight Class (LTL)" />
-              <RadzenTextBox @bind-Value="line.Nmfc" Placeholder="NMFC (optional)" />
-            </RadzenStack>
-          </RadzenFieldset>
+            <RadzenColumn Size="12" SizeMD="3">
+                <RadzenCheckBox @bind-Value="hazmat" />
+                <RadzenLabel Text="Hazmat" class="rz-ml-2" />
+            </RadzenColumn>
+        </RadzenRow>
 
-          <RadzenButton ButtonType="ButtonType.Submit" Icon="calculate" Text="Quote" Disabled="@busy" />
+        <RadzenFieldset Text="Origin / Destination" class="rz-mt-3">
+            <RadzenRow Gap="1rem">
+                <RadzenColumn Size="12" SizeMD="6">
+                    <RadzenText Text="Origin" TextStyle="TextStyle.Subtitle2" />
+                    <RadzenTextBox @bind-Value="model.Origin.Country" Placeholder="Country" Style="width:100%" />
+                    <RadzenTextBox @bind-Value="model.Origin.StateOrProvince" Placeholder="State/Province" Style="width:100%" />
+                    <RadzenTextBox @bind-Value="model.Origin.City" Placeholder="City" Style="width:100%" />
+                    <RadzenTextBox @bind-Value="model.Origin.PostalCode" Placeholder="Postal Code" Style="width:100%" />
+                </RadzenColumn>
+                <RadzenColumn Size="12" SizeMD="6">
+                    <RadzenText Text="Destination" TextStyle="TextStyle.Subtitle2" />
+                    <RadzenTextBox @bind-Value="model.Destination.Country" Placeholder="Country" Style="width:100%" />
+                    <RadzenTextBox @bind-Value="model.Destination.StateOrProvince" Placeholder="State/Province" Style="width:100%" />
+                    <RadzenTextBox @bind-Value="model.Destination.City" Placeholder="City" Style="width:100%" />
+                    <RadzenTextBox @bind-Value="model.Destination.PostalCode" Placeholder="Postal Code" Style="width:100%" />
+                </RadzenColumn>
+            </RadzenRow>
+        </RadzenFieldset>
+
+        <RadzenFieldset Text="Line 1 (starter)" class="rz-mt-3">
+            <RadzenRow Gap="1rem">
+                <RadzenColumn Size="12" SizeMD="2">
+                    <RadzenNumeric @bind-Value="line1.Weight" Placeholder="Weight" Style="width:100%" />
+                </RadzenColumn>
+                <RadzenColumn Size="12" SizeMD="2">
+                    <RadzenNumeric @bind-Value="line1.Pieces" Placeholder="Pieces" Style="width:100%" />
+                </RadzenColumn>
+                <RadzenColumn Size="12" SizeMD="2">
+                    <RadzenNumeric @bind-Value="line1.LengthIn" Placeholder="Len (in)" Style="width:100%" />
+                </RadzenColumn>
+                <RadzenColumn Size="12" SizeMD="2">
+                    <RadzenNumeric @bind-Value="line1.WidthIn" Placeholder="Wid (in)" Style="width:100%" />
+                </RadzenColumn>
+                <RadzenColumn Size="12" SizeMD="2">
+                    <RadzenNumeric @bind-Value="line1.HeightIn" Placeholder="Hei (in)" Style="width:100%" />
+                </RadzenColumn>
+                <RadzenColumn Size="12" SizeMD="2">
+                    <RadzenTextBox @bind-Value="line1.FreightClass" Placeholder="Class (LTL)" Style="width:100%" />
+                </RadzenColumn>
+                <RadzenColumn Size="12" SizeMD="3">
+                    <RadzenTextBox @bind-Value="line1.Nmfc" Placeholder="NMFC (LTL)" Style="width:100%" />
+                </RadzenColumn>
+                <RadzenColumn Size="12" SizeMD="9">
+                    <RadzenTextBox @bind-Value="line1.CommodityDescription" Placeholder="Commodity Description" Style="width:100%" />
+                </RadzenColumn>
+            </RadzenRow>
+        </RadzenFieldset>
+
+        <RadzenStack Orientation="Orientation.Horizontal" Gap="0.75rem" class="rz-mt-3">
+            <RadzenButton ButtonType="ButtonType.Submit" Text="Quote (API)" Icon="calculate" />
+            <RadzenButton Text="Commit (API)" Icon="save" Click="@OnCommit" Disabled="@(!canCommit)" />
+            @if (!string.IsNullOrWhiteSpace(lastCommitIds))
+            {
+                <RadzenText Text="@lastCommitIds" />
+            }
         </RadzenStack>
-      </RadzenTemplateForm>
-    </RadzenCard>
-  </RadzenColumn>
+    </RadzenTemplateForm>
+</RadzenCard>
 
-  <RadzenColumn Size="12" SizeMD="7">
+@if (quote is not null)
+{
     <RadzenCard>
-      <RadzenStack Gap="0.75rem">
-        <RadzenText Text="Result" TextStyle="TextStyle.Subtitle1" />
-        @if (busy)
+        <RadzenText Text=@$"Total: {quote.Total:0.00}" TextStyle="TextStyle.H5" />
+        @if (quote.Warnings.Count > 0)
         {
-          <RadzenProgressBar Mode="ProgressBarMode.Indeterminate" />
+            <RadzenAlert Severity="AlertSeverity.Warning" class="rz-mt-2">
+                <ul>
+                    @foreach (var w in quote.Warnings)
+                    {
+                        <li>@w</li>
+                    }
+                </ul>
+            </RadzenAlert>
         }
-        else if (quote is null)
-        {
-          <RadzenText Text="Submit a request to see pricing." />
-        }
-        else
-        {
-          <RadzenAlert Severity="AlertSeverity.Info">
-            <div><strong>QuoteId:</strong> @quote.QuoteId</div>
-            <div><strong>Total:</strong> @quote.Total</div>
-          </RadzenAlert>
 
-          <RadzenDataGrid Data="@quote.Charges" TItem="RatingChargeLine" AllowPaging="true" PageSize="10">
+        <RadzenDataGrid Data="@quote.Charges" TItem="RatingChargeLine" AllowPaging="false" AllowSorting="false">
             <Columns>
-              <RadzenDataGridColumn TItem="RatingChargeLine" Property="Code" Title="Code" Width="140px" />
-              <RadzenDataGridColumn TItem="RatingChargeLine" Property="Description" Title="Description" />
-              <RadzenDataGridColumn TItem="RatingChargeLine" Property="Amount" Title="Amount" Width="130px" />
+                <RadzenDataGridColumn TItem="RatingChargeLine" Property="Code" Title="Code" />
+                <RadzenDataGridColumn TItem="RatingChargeLine" Property="Description" Title="Description" />
+                <RadzenDataGridColumn TItem="RatingChargeLine" Property="Amount" Title="Amount" />
             </Columns>
-          </RadzenDataGrid>
-
-          @if (quote.Warnings?.Count > 0)
-          {
-            <RadzenFieldset Text="Warnings">
-              <ul>
-                @foreach (var w in quote.Warnings)
-                {
-                  <li>@w</li>
-                }
-              </ul>
-            </RadzenFieldset>
-          }
-        }
-      </RadzenStack>
+        </RadzenDataGrid>
     </RadzenCard>
-  </RadzenColumn>
-</RadzenRow>
+}
 
 @code {
-  private bool busy;
-  private RatingQuoteResponse? quote;
-
-  private readonly List<ModePick> modes = Enum.GetValues<ShipmentMode>()
-    .Select(m => new ModePick(m, m.ToString()))
-    .ToList();
-
-  private QuoteModel model = new()
-  {
-    Mode = ShipmentMode.LTL,
-    Origin = new Address("US", "NY", "New York", "10001"),
-    Destination = new Address("US", "IL", "Chicago", "60601"),
-  };
-
-  private ShipmentLine line = new(Weight: 1000m, Pieces: 1, LengthIn: null, WidthIn: null, HeightIn: null, FreightClass: "55", Nmfc: null);
-
-  private async Task OnSubmit()
-  {
-    busy = true;
-    quote = null;
-    try
-    {
-      var req = new RatingQuoteRequest(
-        Mode: model.Mode,
-        CustomerId: string.IsNullOrWhiteSpace(model.CustomerId) ? null : model.CustomerId,
-        ContractId: string.IsNullOrWhiteSpace(model.ContractId) ? null : model.ContractId,
-        Origin: model.Origin,
-        Destination: model.Destination,
-        ShipDate: DateOnly.FromDateTime(DateTime.UtcNow.Date),
-        Lines: new[] { line },
+    private DateTime shipDate = DateTime.Today;
+    private bool hazmat;
+    private RatingQuoteRequest model = new(
+        Mode: ShipmentMode.LTL,
+        CustomerId: null,
+        ContractId: null,
+        Origin: new Address("US", null, null, null),
+        Destination: new Address("US", null, null, null),
+        ShipDate: DateOnly.FromDateTime(DateTime.Today),
+        Lines: new List<ShipmentLine>(),
         AccessorialCodes: null
-      );
+    );
 
-      quote = await RatingApi.QuoteAsync(req);
-      NotificationService.Notify(new NotificationMessage{ Severity=NotificationSeverity.Success, Summary="Quote complete", Duration=2500 });
-    }
-    catch (Exception ex)
+    private ShipmentLine line1 = new(Weight: 1000m, Pieces: 1, LengthIn: null, WidthIn: null, HeightIn: null, FreightClass: "55", Nmfc: null);
+
+    private RatingQuoteResponse? quote;
+    private string? lastCommitIds;
+
+    private readonly List<dynamic> modes =
+    [
+        new { Text = "LTL", Value = ShipmentMode.LTL },
+        new { Text = "FTL", Value = ShipmentMode.FTL },
+        new { Text = "FCL", Value = ShipmentMode.FCL },
+        new { Text = "LCL", Value = ShipmentMode.LCL }
+    ];
+
+    private bool canCommit => quote is not null;
+
+    private RatingQuoteRequest BuildRequest()
     {
-      NotificationService.Notify(new NotificationMessage{ Severity=NotificationSeverity.Error, Summary="Quote failed", Detail=ex.Message, Duration=5000 });
+        var lines = new List<ShipmentLine> { line1 };
+        return model with
+        {
+            ShipDate = DateOnly.FromDateTime(shipDate),
+            Lines = lines,
+            IsHazmat = hazmat
+        };
     }
-    finally
+
+    private async Task OnQuote()
     {
-      busy = false;
+        try
+        {
+            lastCommitIds = null;
+            quote = await Api.QuoteAsync(BuildRequest());
+        }
+        catch (Exception ex)
+        {
+            Notifications.Notify(NotificationSeverity.Error, "Quote failed", ex.Message);
+        }
     }
-  }
 
-  private sealed record ModePick(ShipmentMode Value, string Text);
-
-  private sealed class QuoteModel
-  {
-    public ShipmentMode Mode { get; set; }
-    public string? CustomerId { get; set; }
-    public string? ContractId { get; set; }
-    public Address Origin { get; set; } = new("US", null, null, null);
-    public Address Destination { get; set; } = new("US", null, null, null);
-  }
+    private async Task OnCommit()
+    {
+        try
+        {
+            var resp = await Api.CommitAsync(BuildRequest());
+            quote = resp.Quote;
+            lastCommitIds = $"Committed RateQuoteId={resp.RateQuoteId}, ResultId={resp.RateQuoteResultId}";
+            Notifications.Notify(NotificationSeverity.Success, "Committed", "Quote saved for reporting.");
+        }
+        catch (Exception ex)
+        {
+            Notifications.Notify(NotificationSeverity.Error, "Commit failed", ex.Message);
+        }
+    }
 }

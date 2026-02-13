@@ -24,4 +24,13 @@ public sealed class RatingApiClient
         resp.EnsureSuccessStatusCode();
         return (await resp.Content.ReadFromJsonAsync<RatingCommitResponse>(cancellationToken: ct))!;
     }
+    public async Task PublishContractVersionAsync(long contractVersionId, string? userId = null, string? note = null, CancellationToken ct = default)
+    {
+        var qs = new List<string>();
+        if (!string.IsNullOrWhiteSpace(userId)) qs.Add($"userId={Uri.EscapeDataString(userId)}");
+        if (!string.IsNullOrWhiteSpace(note)) qs.Add($"note={Uri.EscapeDataString(note)}");
+        var url = $"api/contracts/versions/{contractVersionId}/publish" + (qs.Count > 0 ? "?" + string.Join("&", qs) : "");
+        var resp = await _http.PostAsync(url, content: null, ct);
+        resp.EnsureSuccessStatusCode();
+    }
 }

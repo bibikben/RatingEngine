@@ -11,12 +11,15 @@ public sealed record RatingQuoteRequest(
     DateOnly ShipDate,
     IReadOnlyList<ShipmentLine> Lines,
     IReadOnlyList<string>? AccessorialCodes,
-    Guid? RequestId = null,
+    string? RequestId = null,
     string? OriginPort = null,
     string? DestinationPort = null,
     string? EquipmentType = null,
     string? ContainerType = null,
-    string? ServiceLevel = null
+    string? ServiceLevel = null,
+    string? CommodityCode = null,
+    decimal? DeclaredValue = null,
+    bool? IsHazmat = null
 );
 
 public sealed record Address(
@@ -33,5 +36,6 @@ public sealed record ShipmentLine(
     decimal? WidthIn,
     decimal? HeightIn,
     string? FreightClass,   // LTL
-    string? Nmfc           // LTL
+    string? Nmfc,           // LTL
+    string? CommodityDescription = null
 );

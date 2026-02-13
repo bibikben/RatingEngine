@@ -1,7 +1,7 @@
 namespace BTSS.Rating.Shared.Contracts;
 
 public sealed record RatingCommitResponse(
-    long RateQuoteId,
-    long RateQuoteResultId,
+    string RateQuoteId,
+    string RateQuoteResultId,
     RatingQuoteResponse Quote
 );

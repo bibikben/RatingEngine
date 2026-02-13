@@ -1,7 +1,6 @@
 using BTSS.Rating.Application.Abstractions;
 using BTSS.Rating.Infrastructure.Persistence;
 using BTSS.Rating.Infrastructure.Persistence.Entities;
-using BTSS.Rating.Persistence;
 using BTSS.Rating.Shared.Contracts;
 using BTSS.Rating.Shared.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -12,334 +11,382 @@ public sealed class DbRatingService : IRatingService
 {
     private readonly RatingDbContext _db;
 
-    public DbRatingService(RatingDbContext db) => _db = db;
+    public DbRatingService(RatingDbContext db)
+    {
+        _db = db;
+    }
 
     public async Task<RatingQuoteResponse> QuoteAsync(RatingQuoteRequest request, CancellationToken ct = default)
     {
-        var calc = await ComputeAsync(request, ct);
-        return calc.Response;
-    }
-
-    internal sealed record Computation(
-        RatingQuoteResponse Response,
-        long AccountId,
-        long ProviderId,
-        long ContractId,
-        long ContractVersionId
-    );
-
-    internal async Task<Computation> ComputeAsync(RatingQuoteRequest request, CancellationToken ct)
-    {
         var warnings = new List<string>();
-        var requestId = request.RequestId ?? Guid.NewGuid();
 
-        // 1) Resolve Account
-        var accountCode = request.CustomerId ?? request.ContractId ?? "UNKNOWN";
-        var account = await _db.Accounts.AsNoTracking().FirstOrDefaultAsync(a => a.AccountCode == accountCode, ct);
-        if (account is null)
-            throw new InvalidOperationException($"Account not found for code '{accountCode}'.");
+        // Resolve correlation id
+        Guid requestId = Guid.TryParse(request.RequestId, out var rid) ? rid : Guid.NewGuid();
 
-        // 2) Resolve active Contract
-        var modeStr = request.Mode.ToString();
-        var contract = await _db.Contracts.AsNoTracking()
-            .Where(c => c.AccountId == account.AccountId && c.Mode == modeStr && c.IsActive)
-            .OrderByDescending(c => c.ContractId)
-            .FirstOrDefaultAsync(ct);
+        // Basic input validation (additional validation handled in API model validation as well)
+        if (request.Lines is null || request.Lines.Count == 0)
+            return new RatingQuoteResponse(requestId.ToString("N"), 0m, Array.Empty<RatingChargeLine>(), new[] { "No shipment lines were provided." });
 
-        if (contract is null)
-            throw new InvalidOperationException($"No active contract found for account '{accountCode}' and mode '{modeStr}'.");
+        // Resolve origin/dest zones (for LTL/lane eligibility)
+        var originZone = await ResolveZoneIdAsync(request.Origin.PostalCode, ct);
+        var destZone = await ResolveZoneIdAsync(request.Destination.PostalCode, ct);
 
-        // 3) Resolve published ContractVersion effective on ship date
-        var shipDate = request.ShipDate;
-        var version = await _db.ContractVersions.AsNoTracking()
-            .Where(v => v.ContractId == contract.ContractId
-                        && v.PublishStatus == "Published"
-                        && v.EffectiveStart <= shipDate
-                        && v.EffectiveEnd >= shipDate)
-            .OrderByDescending(v => v.VersionNo)
-            .FirstOrDefaultAsync(ct);
+        if (originZone is null || destZone is null)
+            warnings.Add("Unable to resolve origin/destination zones from PostalCode; zone-based tables may not match.");
 
-        if (version is null)
-            throw new InvalidOperationException($"No published contract version effective on {shipDate:yyyy-MM-dd} for contract {contract.ContractId}.");
+        // Resolve account/contract/version/provider/currency
+        var ctx = await ResolveContractContextAsync(request, ct, warnings);
 
-        // 4) Geo resolution (zone/region)
-        var originGeo = await ResolveGeoAsync(request.Origin, ct);
-        var destGeo = await ResolveGeoAsync(request.Destination, ct);
-
-        if (originGeo.ZoneId is null || destGeo.ZoneId is null)
-            warnings.Add("Origin/Destination zone could not be resolved (GeoZipZone missing).");
-        if (originGeo.RegionId is null || destGeo.RegionId is null)
-            warnings.Add("Origin/Destination region could not be resolved (GeoZipZone missing).");
-
-        // 5) Lane eligibility (best-effort)
-        var laneOk = await LaneEligibleAsync(version.ContractVersionId, modeStr, originGeo, destGeo, ct);
-        if (!laneOk)
-            warnings.Add("No ContractLaneEligibility match found for origin/destination. Rating may be incomplete.");
-
-        // 6) Compute charges by mode
-        var charges = new List<RatingChargeLine>();
-        decimal linehaul = 0m;
-
-        switch (request.Mode)
+        // Lane eligibility check (if we have zones)
+        if (ctx.ContractVersionId is not null && originZone is not null && destZone is not null)
         {
-            case ShipmentMode.LTL:
-                linehaul = await RateLtlAsync(version.ContractVersionId, shipDate, originGeo, destGeo, request, charges, warnings, ct);
-                break;
+            var laneOk = await _db.ContractLaneEligibilities.AsNoTracking()
+                .Where(l => l.ContractVersionId == ctx.ContractVersionId.Value)
+                .AnyAsync(l =>
+                    (l.OriginZoneId == null || l.OriginZoneId == originZone) &&
+                    (l.DestZoneId == null || l.DestZoneId == destZone) &&
+                    (l.OriginRegionId == null || l.OriginRegionId == null) && // region matching optional; omitted here
+                    (l.DestRegionId == null || l.DestRegionId == null) &&
+                    (l.Mode == null || l.Mode == request.Mode.ToString()),
+                    ct);
 
-            case ShipmentMode.FTL:
-                linehaul = await RateFtlAsync(version.ContractVersionId, shipDate, originGeo, destGeo, request, charges, warnings, ct);
-                break;
-
-            case ShipmentMode.FCL:
-                linehaul = await RateFclAsync(version.ContractVersionId, shipDate, request, charges, warnings, ct);
-                break;
-
-            case ShipmentMode.LCL:
-                linehaul = await RateLclAsync(version.ContractVersionId, shipDate, request, charges, warnings, ct);
-                break;
-
-            default:
-                warnings.Add($"Unsupported mode: {request.Mode}");
-                break;
+            if (!laneOk)
+                warnings.Add("No ContractLaneEligibility match found for origin/destination; rating may be incomplete.");
         }
 
-        // 7) Accessorials (flat + percent supported)
-        decimal subtotal = charges.Sum(c => c.Amount);
-        subtotal += await ApplyAccessorialsAsync(version.ContractVersionId, shipDate, request, linehaul, subtotal, charges, warnings, ct);
+        // Build charges
+        var charges = new List<RatingChargeLine>();
 
-        // 8) Fuel (percent rows supported)
-        subtotal += await ApplyFuelAsync(version.ContractVersionId, shipDate, linehaul, subtotal, charges, warnings, ct);
+        decimal linehaul = request.Mode switch
+        {
+            ShipmentMode.LTL => await RateLtlAsync(request, ctx, originZone, destZone, charges, warnings, ct),
+            ShipmentMode.FTL => await RateFtlAsync(request, ctx, charges, warnings, ct),
+            ShipmentMode.FCL => await RateFclAsync(request, ctx, charges, warnings, ct),
+            ShipmentMode.LCL => await RateLclAsync(request, ctx, charges, warnings, ct),
+            _ => 0m
+        };
 
-        var resp = new RatingQuoteResponse(
+        // Accessorials
+        var accessorialTotal = await ApplyAccessorialsAsync(request, ctx, linehaul, charges, warnings, ct);
+
+        // Fuel
+        var fuelTotal = await ApplyFuelAsync(request, ctx, linehaul, linehaul + accessorialTotal, charges, warnings, ct);
+
+        var total = charges.Sum(c => c.Amount);
+
+        return new RatingQuoteResponse(
             QuoteId: requestId.ToString("N"),
-            Total: Math.Round(subtotal, 6),
+            Total: total,
             Charges: charges,
             Warnings: warnings
         );
-
-        return new Computation(resp, account.AccountId, contract.ProviderId, contract.ContractId, version.ContractVersionId);
     }
 
-    private async Task<(int? ZoneId, int? RegionId)> ResolveGeoAsync(Address addr, CancellationToken ct)
+    private async Task<int?> ResolveZoneIdAsync(string? postalCode, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(addr.PostalCode))
-            return (null, null);
-
-        var geo = await _db.GeoZipZones.AsNoTracking()
-            .Where(g => g.CountryCode == addr.Country[..Math.Min(2, addr.Country.Length)] && g.PostalCode == addr.PostalCode)
-            .OrderByDescending(g => g.UpdatedAt)
+        if (string.IsNullOrWhiteSpace(postalCode)) return null;
+        var zip = postalCode.Trim();
+        var row = await _db.GeoZipZones.AsNoTracking()
+            .Where(z => z.Zip == zip)
+            .Select(z => new { z.ZoneId })
             .FirstOrDefaultAsync(ct);
-
-        return geo is null ? (null, null) : (geo.ZoneId, geo.RegionId);
+        return row?.ZoneId;
     }
 
-    private async Task<bool> LaneEligibleAsync(long contractVersionId, string mode, (int? ZoneId, int? RegionId) o, (int? ZoneId, int? RegionId) d, CancellationToken ct)
+    private sealed record ContractContext(
+        long? AccountId,
+        long? ContractId,
+        long? ContractVersionId,
+        long? ProviderId,
+        string CurrencyCode
+    );
+
+    private async Task<ContractContext> ResolveContractContextAsync(RatingQuoteRequest request, CancellationToken ct, List<string> warnings)
     {
-        // Nulls in eligibility columns are treated as wildcards.
-        var q = _db.ContractLaneEligibilities.AsNoTracking()
-            .Where(x => x.ContractVersionId == contractVersionId && x.Mode == mode);
-
-        if (o.ZoneId is not null) q = q.Where(x => x.OriginZoneId == null || x.OriginZoneId == o.ZoneId);
-        if (d.ZoneId is not null) q = q.Where(x => x.DestZoneId == null || x.DestZoneId == d.ZoneId);
-        if (o.RegionId is not null) q = q.Where(x => x.OriginRegionId == null || x.OriginRegionId == o.RegionId);
-        if (d.RegionId is not null) q = q.Where(x => x.DestRegionId == null || x.DestRegionId == d.RegionId);
-
-        return await q.AnyAsync(ct);
-    }
-
-    private async Task<decimal> RateLtlAsync(long contractVersionId, DateOnly shipDate, (int? ZoneId, int? RegionId) o, (int? ZoneId, int? RegionId) d,
-        RatingQuoteRequest request, List<RatingChargeLine> charges, List<string> warnings, CancellationToken ct)
-    {
-        if (o.ZoneId is null || d.ZoneId is null)
+        long? accountId = null;
+        if (!string.IsNullOrWhiteSpace(request.CustomerId))
         {
-            warnings.Add("LTL requires ZoneId for origin/destination to lookup base rates.");
-            return 0m;
+            var acct = await _db.Accounts.AsNoTracking()
+                .Where(a => a.AccountCode == request.CustomerId)
+                .Select(a => new { a.AccountId })
+                .FirstOrDefaultAsync(ct);
+
+            accountId = acct?.AccountId;
+            if (accountId is null)
+                warnings.Add($"No Account found for CustomerId/AccountCode '{request.CustomerId}'.");
         }
 
-        var totalWeight = request.Lines.Sum(l => l.Weight);
-        var classStr = request.Lines.Select(l => l.FreightClass).FirstOrDefault(fc => !string.IsNullOrWhiteSpace(fc)) ?? "55";
-        if (!int.TryParse(new string(classStr.Where(char.IsDigit).ToArray()), out var nmfcClass))
-            nmfcClass = 55;
+        long? contractId = null;
+        if (!string.IsNullOrWhiteSpace(request.ContractId) && long.TryParse(request.ContractId, out var cid))
+            contractId = cid;
 
-        var baseRow = await _db.LtlBaseRates.AsNoTracking()
-            .Where(r => r.ContractVersionId == contractVersionId
-                        && r.OriginZoneId == o.ZoneId
-                        && r.DestZoneId == d.ZoneId
-                        && r.NmfcClass == nmfcClass
-                        && r.EffectiveDate <= shipDate
-                        && r.ExpirationDate >= shipDate
-                        && r.WeightMinLbs <= (int)Math.Ceiling(totalWeight)
-                        && r.WeightMaxLbs >= (int)Math.Ceiling(totalWeight))
-            .OrderBy(r => r.WeightMinLbs)
-            .FirstOrDefaultAsync(ct);
-
-        if (baseRow is null)
+        // Contract selection
+        Contract? contract = null;
+        if (contractId is not null)
         {
-            warnings.Add($"No LTL base rate found for class {nmfcClass}, weight {totalWeight:0.##}, zones {o.ZoneId}->{d.ZoneId}.");
-            return 0m;
+            contract = await _db.Contracts.AsNoTracking()
+                .FirstOrDefaultAsync(c => c.ContractId == contractId.Value, ct);
         }
-
-        var cwt = totalWeight / 100m;
-        var linehaul = Math.Round(cwt * baseRow.RatePerCwt, 6);
-
-        // Discount (most specific: class match first, then null class)
-        var discRow = await _db.LtlDiscountRules.AsNoTracking()
-            .Where(r => r.ContractVersionId == contractVersionId
-                        && r.EffectiveDate <= shipDate
-                        && r.ExpirationDate >= shipDate
-                        && (r.NmfcClass == null || r.NmfcClass == nmfcClass))
-            .OrderByDescending(r => r.NmfcClass.HasValue) // class-specific first
-            .ThenByDescending(r => r.LtlDiscountRuleId)
-            .FirstOrDefaultAsync(ct);
-
-        if (discRow is not null && discRow.DiscountPercent != 0m)
+        else if (accountId is not null)
         {
-            var discountAmt = Math.Round(linehaul * (discRow.DiscountPercent / 100m), 6);
-            linehaul -= discountAmt;
-            charges.Add(new RatingChargeLine("DISCOUNT", $"LTL Discount {discRow.DiscountPercent:0.####}%", -discountAmt));
-        }
-
-        charges.Add(new RatingChargeLine("LINEHAUL", "LTL Linehaul", linehaul));
-
-        // Minimum / deficit
-        var min = discRow?.MinChargeOverride ?? baseRow.MinimumCharge;
-        if (min is not null && linehaul < min.Value)
-        {
-            var deficit = Math.Round(min.Value - linehaul, 6);
-            charges.Add(new RatingChargeLine("MINIMUM", "Minimum charge adjustment", deficit));
-            linehaul = min.Value;
-        }
-
-        return linehaul;
-    }
-
-    private async Task<decimal> RateFtlAsync(long contractVersionId, DateOnly shipDate, (int? ZoneId, int? RegionId) o, (int? ZoneId, int? RegionId) d,
-        RatingQuoteRequest request, List<RatingChargeLine> charges, List<string> warnings, CancellationToken ct)
-    {
-        if (o.RegionId is null || d.RegionId is null)
-        {
-            warnings.Add("FTL requires RegionId for origin/destination to lookup lane rates.");
-            return 0m;
-        }
-
-        var equipment = "VAN";
-        var row = await _db.FtlLaneRates.AsNoTracking()
-            .Where(r => r.ContractVersionId == contractVersionId
-                        && r.OriginRegionId == o.RegionId
-                        && r.DestRegionId == d.RegionId
-                        && r.EquipmentType == equipment
-                        && r.EffectiveDate <= shipDate
-                        && r.ExpirationDate >= shipDate)
-            .OrderByDescending(r => r.FtlLaneRateId)
-            .FirstOrDefaultAsync(ct);
-
-        if (row is null)
-        {
-            // fallback: any equipment
-            row = await _db.FtlLaneRates.AsNoTracking()
-                .Where(r => r.ContractVersionId == contractVersionId
-                            && r.OriginRegionId == o.RegionId
-                            && r.DestRegionId == d.RegionId
-                            && r.EffectiveDate <= shipDate
-                            && r.ExpirationDate >= shipDate)
-                .OrderByDescending(r => r.FtlLaneRateId)
+            contract = await _db.Contracts.AsNoTracking()
+                .Where(c => c.AccountId == accountId.Value && c.IsActive && c.Mode == request.Mode.ToString())
+                .OrderByDescending(c => c.CreatedAt)
                 .FirstOrDefaultAsync(ct);
         }
 
-        if (row is null)
+        if (contract is null)
         {
-            warnings.Add($"No FTL lane rate found for regions {o.RegionId}->{d.RegionId}.");
+            warnings.Add("No contract was resolved; rates may not match contract-specific tables.");
+            return new ContractContext(accountId, null, null, null, "USD");
+        }
+
+        contractId = contract.ContractId;
+
+        // Published version effective on ship date
+        var shipDate = request.ShipDate;
+        var version = await _db.ContractVersions.AsNoTracking()
+            .Where(v => v.ContractId == contractId.Value &&
+                        v.PublishStatus == "Published" &&
+                        v.EffectiveFrom <= shipDate &&
+                        v.EffectiveTo >= shipDate)
+            .OrderByDescending(v => v.EffectiveFrom)
+            .FirstOrDefaultAsync(ct);
+
+        if (version is null)
+        {
+            warnings.Add("No published ContractVersion effective for the ship date.");
+            return new ContractContext(accountId, contractId, null, contract.ProviderId, contract.CurrencyCode ?? "USD");
+        }
+
+        return new ContractContext(accountId, contractId, version.ContractVersionId, contract.ProviderId, contract.CurrencyCode ?? "USD");
+    }
+
+    private async Task<decimal> RateLtlAsync(
+        RatingQuoteRequest request,
+        ContractContext ctx,
+        int? originZone,
+        int? destZone,
+        List<RatingChargeLine> charges,
+        List<string> warnings,
+        CancellationToken ct)
+    {
+        if (ctx.ContractVersionId is null || originZone is null || destZone is null)
+        {
+            warnings.Add("LTL requires ContractVersionId and zone resolution; no LTL linehaul calculated.");
             return 0m;
         }
 
-        var linehaul = row.RateValue;
-        charges.Add(new RatingChargeLine("LINEHAUL", "FTL Linehaul", linehaul));
+        decimal totalLinehaul = 0m;
 
-        if (row.MinimumCharge is not null && linehaul < row.MinimumCharge.Value)
+        foreach (var line in request.Lines)
         {
-            var deficit = Math.Round(row.MinimumCharge.Value - linehaul, 6);
-            charges.Add(new RatingChargeLine("MINIMUM", "Minimum charge adjustment", deficit));
-            linehaul = row.MinimumCharge.Value;
+            if (!int.TryParse(line.FreightClass, out var nmfcClass))
+            {
+                warnings.Add("Missing or invalid FreightClass for an LTL line; skipping line.");
+                continue;
+            }
+
+            var weightLbs = (int)Math.Ceiling(line.Weight);
+
+            var baseRow = await _db.LtlBaseRates.AsNoTracking()
+                .Where(r => r.ContractVersionId == ctx.ContractVersionId.Value
+                            && r.OriginZoneId == originZone.Value
+                            && r.DestZoneId == destZone.Value
+                            && r.NmfcClass == nmfcClass
+                            && r.WeightMinLbs <= weightLbs
+                            && r.WeightMaxLbs >= weightLbs
+                            && r.EffectiveDate <= request.ShipDate
+                            && r.ExpirationDate >= request.ShipDate)
+                .OrderByDescending(r => r.WeightMinLbs)
+                .FirstOrDefaultAsync(ct);
+
+            if (baseRow is null)
+            {
+                warnings.Add($"No LTL base rate found for class {nmfcClass}, weight {weightLbs} lbs, zones {originZone}->{destZone}.");
+                continue;
+            }
+
+            var cwt = line.Weight / 100m;
+            var baseAmount = cwt * baseRow.RatePerCwt;
+
+            // Apply discount rule (specific class first, then wildcard)
+            var disc = await _db.LtlDiscountRules.AsNoTracking()
+                .Where(d => d.ContractVersionId == ctx.ContractVersionId.Value
+                            && d.EffectiveDate <= request.ShipDate
+                            && d.ExpirationDate >= request.ShipDate
+                            && (d.NmfcClass == nmfcClass || d.NmfcClass == null))
+                .OrderByDescending(d => d.NmfcClass.HasValue) // prefer exact class
+                .ThenByDescending(d => d.DiscountPercent)
+                .FirstOrDefaultAsync(ct);
+
+            var discountPct = disc?.DiscountPercent ?? 0m;
+            var discounted = baseAmount * (1m - (discountPct / 100m));
+
+            // Minimum charge logic
+            decimal? minCharge = disc?.MinChargeOverride ?? baseRow.MinimumCharge;
+            if (minCharge.HasValue && discounted < minCharge.Value)
+            {
+                discounted = minCharge.Value;
+                warnings.Add($"Minimum charge applied for class {nmfcClass}.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(baseRow.DeficitRuleJson))
+                warnings.Add("DeficitRuleJson present for LTL base rate but not applied (MVP).");
+
+            totalLinehaul += discounted;
         }
 
-        return linehaul;
+        if (totalLinehaul > 0)
+            charges.Add(new RatingChargeLine("LINEHAUL", "LTL linehaul", totalLinehaul));
+
+        return totalLinehaul;
     }
 
-    private async Task<decimal> RateFclAsync(long contractVersionId, DateOnly shipDate, RatingQuoteRequest request,
-        List<RatingChargeLine> charges, List<string> warnings, CancellationToken ct)
+    private async Task<decimal> RateFtlAsync(
+        RatingQuoteRequest request,
+        ContractContext ctx,
+        List<RatingChargeLine> charges,
+        List<string> warnings,
+        CancellationToken ct)
     {
-        // FCL tables require ports; expect caller to provide via Address.City as a temporary workaround or extend request model later.
-        var originPort = request.Origin.City ?? request.Origin.PostalCode ?? "";
-        var destPort = request.Destination.City ?? request.Destination.PostalCode ?? "";
-        var containerType = request.ContainerType;
+        if (ctx.ContractVersionId is null)
+        {
+            warnings.Add("FTL requires ContractVersionId; no FTL linehaul calculated.");
+            return 0m;
+        }
+
+        // FTL table uses Location/Region or free-form? We'll match by origin/dest region if possible.
+        // MVP: match by EquipmentType (nullable) and shipdate window.
+        var eq = request.EquipmentType;
+
+        var rate = await _db.FtlLaneRates.AsNoTracking()
+            .Where(r => r.ContractVersionId == ctx.ContractVersionId.Value
+                        && r.EffectiveDate <= request.ShipDate
+                        && r.ExpirationDate >= request.ShipDate
+                        && (eq == null || r.EquipmentType == null || r.EquipmentType == eq))
+            .OrderByDescending(r => r.EquipmentType == eq) // prefer exact match
+            .FirstOrDefaultAsync(ct);
+
+        if (rate is null)
+        {
+            warnings.Add("No FTL lane rate found for the contract/version/date.");
+            return 0m;
+        }
+
+        var amt = rate.FlatAmount;
+        charges.Add(new RatingChargeLine("LINEHAUL", "FTL linehaul", amt));
+        return amt;
+    }
+
+    private async Task<decimal> RateFclAsync(
+        RatingQuoteRequest request,
+        ContractContext ctx,
+        List<RatingChargeLine> charges,
+        List<string> warnings,
+        CancellationToken ct)
+    {
+        if (ctx.ContractVersionId is null)
+        {
+            warnings.Add("FCL requires ContractVersionId; no FCL linehaul calculated.");
+            return 0m;
+        }
+
+        if (string.IsNullOrWhiteSpace(request.OriginPort) || string.IsNullOrWhiteSpace(request.DestinationPort))
+        {
+            warnings.Add("OriginPort/DestinationPort are required for FCL rating.");
+            return 0m;
+        }
+
+        var container = request.ContainerType;
 
         var row = await _db.FclContainerRates.AsNoTracking()
-            .Where(r => r.ContractVersionId == contractVersionId
-                        && r.OriginPort == originPort
-                        && r.DestPort == destPort
-                        && r.ContainerType == containerType
-                        && r.EffectiveDate <= shipDate
-                        && r.ExpirationDate >= shipDate)
-            .OrderByDescending(r => r.FclContainerRateId)
+            .Where(r => r.ContractVersionId == ctx.ContractVersionId.Value
+                        && r.OriginPort == request.OriginPort
+                        && r.DestPort == request.DestinationPort
+                        && r.EffectiveDate <= request.ShipDate
+                        && r.ExpirationDate >= request.ShipDate
+                        && (container == null || r.ContainerType == null || r.ContainerType == container))
+            .OrderByDescending(r => r.ContainerType == container)
             .FirstOrDefaultAsync(ct);
 
         if (row is null)
         {
-            warnings.Add("No FCL container rate matched. Provide Origin/Dest port codes to rate accurately.");
+            warnings.Add("No FCL container rate found for the requested ports/container.");
             return 0m;
         }
 
-        charges.Add(new RatingChargeLine("LINEHAUL", "FCL Base Rate", row.BaseRate));
-        return row.BaseRate;
+        var amt = row.FlatAmount;
+        charges.Add(new RatingChargeLine("LINEHAUL", "FCL linehaul", amt));
+        return amt;
     }
 
-    private async Task<decimal> RateLclAsync(long contractVersionId, DateOnly shipDate, RatingQuoteRequest request,
-        List<RatingChargeLine> charges, List<string> warnings, CancellationToken ct)
+    private async Task<decimal> RateLclAsync(
+        RatingQuoteRequest request,
+        ContractContext ctx,
+        List<RatingChargeLine> charges,
+        List<string> warnings,
+        CancellationToken ct)
     {
-        var originPort = request.Origin.City ?? request.Origin.PostalCode ?? "";
-        var destPort = request.Destination.City ?? request.Destination.PostalCode ?? "";
-
-        var row = await _db.LclRates.AsNoTracking()
-            .Where(r => r.ContractVersionId == contractVersionId
-                        && r.OriginPort == originPort
-                        && r.DestPort == destPort
-                        && r.EffectiveDate <= shipDate
-                        && r.ExpirationDate >= shipDate)
-            .OrderByDescending(r => r.LclRateId)
-            .FirstOrDefaultAsync(ct);
-
-        if (row is null)
+        if (ctx.ContractVersionId is null)
         {
-            warnings.Add("No LCL rate matched. Provide Origin/Dest port codes to rate accurately.");
+            warnings.Add("LCL requires ContractVersionId; no LCL linehaul calculated.");
+            return 0m;
+        }
+
+        if (string.IsNullOrWhiteSpace(request.OriginPort) || string.IsNullOrWhiteSpace(request.DestinationPort))
+        {
+            warnings.Add("OriginPort/DestinationPort are required for LCL rating.");
             return 0m;
         }
 
         var totalWeight = request.Lines.Sum(l => l.Weight);
-        var linehaul = row.RatePerLb is not null ? totalWeight * row.RatePerLb.Value : row.MinimumCharge;
+        var row = await _db.LclRates.AsNoTracking()
+            .Where(r => r.ContractVersionId == ctx.ContractVersionId.Value
+                        && r.OriginPort == request.OriginPort
+                        && r.DestPort == request.DestinationPort
+                        && r.EffectiveDate <= request.ShipDate
+                        && r.ExpirationDate >= request.ShipDate
+                        && r.WeightMinLbs <= totalWeight
+                        && r.WeightMaxLbs >= totalWeight)
+            .OrderByDescending(r => r.WeightMinLbs)
+            .FirstOrDefaultAsync(ct);
 
-        if (linehaul < row.MinimumCharge)
+        if (row is null)
         {
-            charges.Add(new RatingChargeLine("MINIMUM", "Minimum charge adjustment", row.MinimumCharge - linehaul));
-            linehaul = row.MinimumCharge;
+            warnings.Add("No LCL rate found for requested ports/weight.");
+            return 0m;
         }
 
-        charges.Add(new RatingChargeLine("LINEHAUL", "LCL Linehaul", Math.Round(linehaul, 6)));
-        return Math.Round(linehaul, 6);
+        var amt = (totalWeight / 100m) * row.RatePerCwt;
+        if (row.MinimumCharge.HasValue && amt < row.MinimumCharge.Value)
+            amt = row.MinimumCharge.Value;
+
+        charges.Add(new RatingChargeLine("LINEHAUL", "LCL linehaul", amt));
+        return amt;
     }
 
-    private async Task<decimal> ApplyAccessorialsAsync(long contractVersionId, DateOnly shipDate, RatingQuoteRequest request, decimal linehaul, decimal subtotal,
-        List<RatingChargeLine> charges, List<string> warnings, CancellationToken ct)
+    private async Task<decimal> ApplyAccessorialsAsync(
+        RatingQuoteRequest request,
+        ContractContext ctx,
+        decimal linehaul,
+        List<RatingChargeLine> charges,
+        List<string> warnings,
+        CancellationToken ct)
     {
-        if (request.AccessorialCodes is null || request.AccessorialCodes.Count == 0)
-            return 0m;
+        if (ctx.ContractVersionId is null) return 0m;
+        if (request.AccessorialCodes is null || request.AccessorialCodes.Count == 0) return 0m;
 
-        var codes = request.AccessorialCodes.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.Trim()).Distinct().ToArray();
-        if (codes.Length == 0) return 0m;
+        var codes = request.AccessorialCodes.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.Trim()).Distinct().ToList();
+        if (codes.Count == 0) return 0m;
 
-        var accessorials = await _db.Accessorials.AsNoTracking().Where(a => codes.Contains(a.Code)).ToListAsync(ct);
-        var byCode = accessorials.ToDictionary(a => a.Code, a => a);
+        var accessorials = await _db.Accessorials.AsNoTracking()
+            .Where(a => codes.Contains(a.Code))
+            .ToListAsync(ct);
 
-        decimal added = 0m;
+        var byCode = accessorials.ToDictionary(a => a.Code, StringComparer.OrdinalIgnoreCase);
+        decimal total = 0m;
+
         foreach (var code in codes)
         {
             if (!byCode.TryGetValue(code, out var acc))
@@ -349,83 +396,116 @@ public sealed class DbRatingService : IRatingService
             }
 
             var chargeRow = await _db.ContractAccessorialCharges.AsNoTracking()
-                .Where(c => c.ContractVersionId == contractVersionId
+                .Where(c => c.ContractVersionId == ctx.ContractVersionId.Value
                             && c.AccessorialId == acc.AccessorialId
-                            && c.EffectiveDate <= shipDate
-                            && c.ExpirationDate >= shipDate)
-                .OrderByDescending(c => c.ContractAccessorialChargeId)
+                            && c.EffectiveDate <= request.ShipDate
+                            && c.ExpirationDate >= request.ShipDate)
+                .OrderByDescending(c => c.EffectiveDate)
                 .FirstOrDefaultAsync(ct);
 
             if (chargeRow is null)
             {
-                warnings.Add($"No contract accessorial charge found for '{code}'.");
+                warnings.Add($"No contract accessorial charge configured for '{code}'.");
                 continue;
             }
 
             decimal amount = 0m;
-            if (chargeRow.CalcType == "Flat" && chargeRow.FlatAmount is not null)
-                amount = chargeRow.FlatAmount.Value;
-            else if (chargeRow.CalcType == "Percent" && chargeRow.PercentValue is not null)
+            var calcType = (chargeRow.CalcType ?? "").Trim();
+
+            if (calcType.Equals("Flat", StringComparison.OrdinalIgnoreCase))
             {
-                var basis = (chargeRow.ApplyTo ?? "Linehaul") switch
-                {
-                    "Total" => subtotal,
-                    _ => linehaul
-                };
-                amount = Math.Round(basis * (chargeRow.PercentValue.Value / 100m), 6);
+                amount = chargeRow.FlatAmount ?? 0m;
+            }
+            else if (calcType.Equals("Percent", StringComparison.OrdinalIgnoreCase))
+            {
+                var pct = chargeRow.PercentValue ?? 0m;
+                var baseAmt = chargeRow.ApplyTo?.Equals("TOTAL", StringComparison.OrdinalIgnoreCase) == true ? linehaul : linehaul;
+                amount = baseAmt * (pct / 100m);
             }
             else
             {
-                warnings.Add($"Accessorial '{code}' calc type '{chargeRow.CalcType}' not supported in MVP.");
-                continue;
+                // MVP: treat unknown as flat if provided
+                amount = chargeRow.FlatAmount ?? 0m;
+                warnings.Add($"Accessorial '{code}' CalcType '{calcType}' not fully supported (MVP).");
             }
 
-            // Min/Max
-            if (chargeRow.MinAmount is not null && amount < chargeRow.MinAmount.Value) amount = chargeRow.MinAmount.Value;
-            if (chargeRow.MaxAmount is not null && amount > chargeRow.MaxAmount.Value) amount = chargeRow.MaxAmount.Value;
+            if (chargeRow.MinAmount.HasValue && amount < chargeRow.MinAmount.Value)
+                amount = chargeRow.MinAmount.Value;
+            if (chargeRow.MaxAmount.HasValue && amount > chargeRow.MaxAmount.Value)
+                amount = chargeRow.MaxAmount.Value;
 
-            charges.Add(new RatingChargeLine(code, acc.Description ?? code, Math.Round(amount, 6)));
-            added += amount;
+            if (amount != 0m)
+            {
+                var desc = acc.Description ?? "Accessorial";
+                charges.Add(new RatingChargeLine(code.ToUpperInvariant(), desc, amount));
+                total += amount;
+            }
         }
 
-        return Math.Round(added, 6);
+        return total;
     }
 
-    private async Task<decimal> ApplyFuelAsync(long contractVersionId, DateOnly shipDate, decimal linehaul, decimal subtotal,
-        List<RatingChargeLine> charges, List<string> warnings, CancellationToken ct)
+    private async Task<decimal> ApplyFuelAsync(
+        RatingQuoteRequest request,
+        ContractContext ctx,
+        decimal linehaul,
+        decimal totalBeforeFuel,
+        List<RatingChargeLine> charges,
+        List<string> warnings,
+        CancellationToken ct)
     {
-        var rule = await _db.ContractFuelRules.AsNoTracking()
-            .Where(r => r.ContractVersionId == contractVersionId
-                        && r.EffectiveDate <= shipDate
-                        && r.ExpirationDate >= shipDate)
-            .OrderByDescending(r => r.ContractFuelRuleId)
+        if (ctx.ContractVersionId is null) return 0m;
+
+        var fuelRule = await _db.ContractFuelRules.AsNoTracking()
+            .Where(r => r.ContractVersionId == ctx.ContractVersionId.Value
+                        && r.EffectiveDate <= request.ShipDate
+                        && r.ExpirationDate >= request.ShipDate)
+            .OrderByDescending(r => r.EffectiveDate)
             .FirstOrDefaultAsync(ct);
 
-        if (rule is null)
-            return 0m;
+        if (fuelRule is null) return 0m;
 
-        var row = await _db.FuelScheduleRows.AsNoTracking()
-            .Where(r => r.FuelScheduleId == rule.FuelScheduleId
-                        && r.EffectiveStart <= shipDate
-                        && r.EffectiveEnd >= shipDate)
-            .OrderByDescending(r => r.FuelScheduleRowId)
+        var scheduleRow = await _db.FuelScheduleRows.AsNoTracking()
+            .Where(r => r.FuelScheduleId == fuelRule.FuelScheduleId
+                        && r.EffectiveStart <= request.ShipDate
+                        && r.EffectiveEnd >= request.ShipDate)
+            .OrderByDescending(r => r.EffectiveStart)
             .FirstOrDefaultAsync(ct);
 
-        if (row is null)
+        if (scheduleRow is null)
         {
-            warnings.Add("Fuel rule exists but no FuelScheduleRow matched the ship date.");
+            warnings.Add("Fuel rule found but no schedule row matches ship date.");
             return 0m;
         }
 
-        // MVP: treat FuelValue as percentage
-        var basis = (rule.ApplyTo ?? "Linehaul") switch
-        {
-            "Total" => subtotal,
-            _ => linehaul
-        };
-        var fuelAmount = Math.Round(basis * (row.FuelValue / 100m), 6);
+        // MVP: FuelValue is treated as a percent when CalcMethod == Percent
+        var method = (fuelRule.CalcMethod ?? "").Trim();
+        decimal fuelAmount;
 
-        charges.Add(new RatingChargeLine("FUEL", "Fuel surcharge", fuelAmount));
+        if (method.Equals("Percent", StringComparison.OrdinalIgnoreCase))
+        {
+            var pct = scheduleRow.FuelValue;
+            var applyTo = (fuelRule.ApplyTo ?? "").Trim().ToUpperInvariant();
+            var baseAmt = applyTo == "TOTAL" ? totalBeforeFuel : linehaul;
+            fuelAmount = baseAmt * (pct / 100m);
+        }
+        else if (method.Equals("Flat", StringComparison.OrdinalIgnoreCase))
+        {
+            fuelAmount = scheduleRow.FuelValue;
+        }
+        else
+        {
+            // fallback: percent
+            var pct = scheduleRow.FuelValue;
+            fuelAmount = linehaul * (pct / 100m);
+            warnings.Add($"Fuel CalcMethod '{method}' not fully supported; treated as Percent (MVP).");
+        }
+
+        if (fuelAmount != 0m)
+        {
+            charges.Add(new RatingChargeLine("FUEL", "Fuel surcharge", fuelAmount));
+        }
+
         return fuelAmount;
     }
 }

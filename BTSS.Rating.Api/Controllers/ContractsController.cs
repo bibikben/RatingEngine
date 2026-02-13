@@ -12,6 +12,7 @@ public sealed class ContractsController : ControllerBase
     /// </summary>
     [HttpPost("versions/{contractVersionId:long}/publish")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> PublishVersion(
         [FromRoute] long contractVersionId,
         [FromQuery] string? userId,
@@ -19,7 +20,14 @@ public sealed class ContractsController : ControllerBase
         [FromServices] IContractVersionPublisher publisher,
         CancellationToken ct)
     {
+        try
+        {
         await publisher.PublishAsync(contractVersionId, userId, note, ct);
         return NoContent();
+        }
+        catch (Exception ex)
+        {
+            return Problem(detail: ex.Message, statusCode: StatusCodes.Status400BadRequest);
+        }
     }
 }

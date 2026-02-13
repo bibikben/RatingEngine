@@ -14,11 +14,12 @@ public static class DependencyInjection
         var cs = configuration.GetConnectionString("RatingDb") ?? "Server=.;Database=RatingDb;Trusted_Connection=True;TrustServerCertificate=True";
         services.AddDbContext<RatingDbContext>(opt => opt.UseSqlServer(cs));
 
+        services.AddScoped<BTSS.Rating.Application.Abstractions.IRatingService, BTSS.Rating.Infrastructure.Services.DbRatingService>();
         services.AddScoped<BTSS.Rating.Application.Abstractions.IContractLookup, BTSS.Rating.Infrastructure.Services.ContractLookup>();
         // TODO: register repositories / query services here
-            services.AddScoped<BTSS.Rating.Application.Abstractions.IRatingService, BTSS.Rating.Infrastructure.Services.DbRatingService>();
+        services.AddScoped<BTSS.Rating.Application.Abstractions.IRatingCommitService, BTSS.Rating.Infrastructure.Services.RatingCommitService>();
     services.AddScoped<BTSS.Rating.Application.Abstractions.IContractVersionPublisher, BTSS.Rating.Infrastructure.Services.ContractVersionPublisher>();
-    services.AddScoped<BTSS.Rating.Application.Abstractions.IRatingCommitService, BTSS.Rating.Infrastructure.Services.RatingCommitService>();
+        // TODO: register repositories / query services here
         return services;
     }
 }

@@ -1,7 +1,6 @@
 using BTSS.Rating.Application.Abstractions;
 using BTSS.Rating.Domain.Contracts;
 using BTSS.Rating.Infrastructure.Persistence;
-using BTSS.Rating.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace BTSS.Rating.Infrastructure.Services;
